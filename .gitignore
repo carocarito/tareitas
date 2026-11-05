@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+
+# Datos locales de cada persona; no se comparten en el repositorio.
+*.db
+TareitasTk/
+
+# Salidas temporales de PyInstaller. El ejecutable publicable vive en release/.
+build/
+dist/
+*.spec
