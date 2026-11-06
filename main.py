@@ -530,8 +530,10 @@ class Tareitas(tk.Tk):
         self.mini_text.pack(side="left",fill="both",expand=True)
         tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2").pack(side="right")
         self.mini_tasks=tk.Frame(widget,bg=a)
-        self.mini_expand=tk.Button(widget,text="⌄",command=self.toggle_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,15,"bold"),cursor="hand2")
+        # Flecha dibujada: evita que una fuente sin ese glifo muestre '?'.
+        self.mini_expand=tk.Canvas(widget,bg=a,width=44,height=22,highlightthickness=0,cursor="hand2")
         self.mini_expand.pack(side="bottom",pady=(0,3))
+        self.mini_expand.bind("<Button-1>",lambda _event:self.toggle_mini_widget())
         content.bind("<Button-1>",lambda _event:self.restore_from_widget())
         self.mini_text.bind("<Button-1>",lambda _event:self.restore_from_widget())
         widget.protocol("WM_DELETE_WINDOW",self.exit_app)
@@ -573,7 +575,11 @@ class Tareitas(tk.Tk):
         pending=len(pending_tasks)
         plural="tarea pendiente" if pending == 1 else "tareas pendientes"
         self.mini_text.config(text=f"Tareitas  ·  {pending} {plural} hoy")
-        self.mini_expand.config(text="⌃" if self.mini_expanded else "⌄")
+        self.mini_expand.delete("all")
+        if self.mini_expanded:
+            self.mini_expand.create_polygon(12,15,22,6,32,15,fill="white",outline="white")
+        else:
+            self.mini_expand.create_polygon(12,7,22,16,32,7,fill="white",outline="white")
         for child in self.mini_tasks.winfo_children(): child.destroy()
         width=330; height=90
         if self.mini_expanded:
