@@ -69,7 +69,16 @@ class Database:
         );
         CREATE TABLE IF NOT EXISTS completions(task_id INTEGER NOT NULL, day TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(task_id,day));
         CREATE TABLE IF NOT EXISTS pomodoros(id INTEGER PRIMARY KEY, title TEXT NOT NULL, work INTEGER NOT NULL, rest INTEGER NOT NULL, cycles INTEGER NOT NULL, completed_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         """)
+        self.conn.commit()
+
+    def setting(self, key: str, default: str) -> str:
+        row=self.conn.execute("SELECT value FROM settings WHERE key=?",(key,)).fetchone()
+        return row[0] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self.conn.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(key,value))
         self.conn.commit()
 
     def due(self, target: date):
@@ -121,7 +130,11 @@ class Tareitas(tk.Tk):
         # En pantallas Windows de alta densidad Tk amplía las fuentes en
         # exceso. Esta escala conserva nitidez y las reduce de forma pareja.
         self.tk.call("tk", "scaling", 1.15)
-        self.db, self.day = Database(), date.today(); self.palette_name = "Violeta / Lavanda"; self.dark = False; self.notice_minutes = 120
+        self.db, self.day = Database(), date.today()
+        saved_palette=self.db.setting("palette", "Violeta / Lavanda")
+        self.palette_name = saved_palette if saved_palette in PALETTES else "Violeta / Lavanda"
+        self.dark = self.db.setting("dark", "0") == "1"
+        self.notice_minutes = int(self.db.setting("notice_minutes", "120"))
         self.calendar_month = self.day.replace(day=1)
         self.mini_widget = None
         self.style = ttk.Style(self); self.style.theme_use("clam")
@@ -142,8 +155,10 @@ class Tareitas(tk.Tk):
         self.style.map("TButton", background=[("active", a)], foreground=[("active", "white")])
         self.style.configure("Accent.TButton", background=a, foreground="white"); self.style.configure("Soft.TButton", background=s, foreground=ink)
         self.style.configure("TEntry", fieldbackground=surface, foreground=ink); self.style.configure("TCombobox", fieldbackground=surface, foreground=ink)
+        self.style.configure("Slim.Vertical.TScrollbar", background=s, troughcolor=surface, borderwidth=0, arrowsize=9, width=8)
 
     def clear(self):
+        self.unbind_all("<MouseWheel>")
         for child in self.container.winfo_children(): child.destroy()
 
     def header(self, parent, title, back=None):
@@ -152,11 +167,26 @@ class Tareitas(tk.Tk):
         tk.Label(bar, text=title, bg=a, fg="white", font=("Segoe UI",24,"bold")).place(relx=.5,y=25,anchor="n")
         return bar
 
+    def rounded_action(self, parent, text, command, bg, fg, width=150):
+        """Botón Canvas para esquinas suaves sin depender de controles nativos."""
+        canvas=tk.Canvas(parent,bg=parent.cget("bg"),height=46,width=width,highlightthickness=0,cursor="hand2")
+        canvas.pack(side="left",padx=5)
+        def render(_event=None):
+            canvas.delete("all"); w=max(canvas.winfo_width(),width); r=13
+            canvas.create_arc(0,0,2*r,2*r,start=90,extent=90,fill=bg,outline=bg)
+            canvas.create_arc(w-2*r,0,w,2*r,start=0,extent=90,fill=bg,outline=bg)
+            canvas.create_arc(0,46-2*r,2*r,46,start=180,extent=90,fill=bg,outline=bg)
+            canvas.create_arc(w-2*r,46-2*r,w,46,start=270,extent=90,fill=bg,outline=bg)
+            canvas.create_rectangle(r,0,w-r,46,fill=bg,outline=bg); canvas.create_rectangle(0,r,w,46-r,fill=bg,outline=bg)
+            canvas.create_text(w/2,23,text=text,fill=fg,font=("Segoe UI",10,"bold"),tags=("action",))
+        canvas.bind("<Configure>",render); canvas.bind("<Button-1>",lambda _e:command()); canvas.tag_bind("action","<Button-1>",lambda _e:command())
+        return canvas
+
     def show_home(self):
         self.clear(); a,s,m,p,surface,ink = self.colors()
         hero = tk.Frame(self.container,bg=a,height=246); hero.pack(fill="x"); hero.pack_propagate(False)
         tk.Button(hero,text="▦",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",19,"bold"),cursor="hand2").place(x=35,y=35)
-        appearance = tk.Button(hero,text="🎨",command=self.appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2")
+        appearance = tk.Button(hero,text="🎨",command=self.show_appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2")
         appearance.place(relx=1.0,x=-58,y=30,width=42,height=42)
         tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=("Segoe UI",18,"bold")).place(relx=.5,y=42,anchor="n")
         tk.Label(hero,text="Hoy",bg=a,fg="white",font=("Segoe UI",31,"bold")).place(x=31,y=166)
@@ -167,6 +197,9 @@ class Tareitas(tk.Tk):
         for offset in range(-2,3):
             current=self.day+timedelta(days=offset); selected=current==self.day
             tk.Button(days,text=f"{current.day:02d}\n{WEEKDAYS[current.weekday()].lower()}",command=lambda d=current:self.set_day(d),bg=a if selected else s,fg="white" if selected else ink,activebackground=a if selected else s,activeforeground="white" if selected else ink,border=0,highlightthickness=0,width=7,height=3,font=("Segoe UI",11,"bold"),cursor="hand2").pack(side="left",padx=5)
+        quick=tk.Frame(body,bg=surface); quick.pack(fill="x",padx=28,pady=(0,13))
+        self.rounded_action(quick,"▦  Calendario",self.show_calendar,s,ink,155)
+        self.rounded_action(quick,"⌛  Pomodoro",self.show_pomodoro,s,ink,155)
         tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=("Segoe UI",25,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
@@ -175,10 +208,10 @@ class Tareitas(tk.Tk):
         # fuera de la ventana, incluso cuando una lista tenga muchas tareas.
         foot=tk.Frame(body,bg=surface,height=100); foot.pack(fill="x",side="bottom",padx=28,pady=(5,18)); foot.pack_propagate(False)
         tk.Button(foot,text="Salir",command=self.destroy,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(x=0,y=31)
-        tk.Button(foot,text="Calendario",command=self.show_calendar,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=.42,y=31,anchor="n")
-        tk.Button(foot,text="Pomodoro",command=self.show_pomodoro,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=1.0,x=-92,y=31,anchor="n")
+        tk.Button(foot,text="Historial",command=self.show_history,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=.47,y=31,anchor="n")
         tk.Button(foot,text="+",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",29,"bold"),cursor="hand2").place(relx=1.0,x=0,y=16,width=64,height=64,anchor="ne")
-        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); scroll=ttk.Scrollbar(body,orient="vertical",command=canvas.yview); items=tk.Frame(canvas,bg=surface); items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0,0),window=items,anchor="nw"); canvas.configure(yscrollcommand=scroll.set); canvas.pack(side="left",fill="both",expand=True,padx=(28,0),pady=6); scroll.pack(side="right",fill="y",padx=(0,28))
+        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); scroll=ttk.Scrollbar(body,orient="vertical",command=canvas.yview,style="Slim.Vertical.TScrollbar"); items=tk.Frame(canvas,bg=surface); items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0,0),window=items,anchor="nw"); canvas.configure(yscrollcommand=scroll.set); canvas.pack(side="left",fill="both",expand=True,padx=(28,0),pady=6); scroll.pack(side="right",fill="y",padx=(0,20))
+        self.bind_all("<MouseWheel>",lambda event:canvas.yview_scroll(int(-event.delta/120),"units"))
         if not tasks: tk.Label(items,text="No hay tareas para este día.",bg=surface,fg=m,font=("Segoe UI",13)).pack(pady=50)
         for task in tasks: self.task_card(items,task,s,m,ink)
 
@@ -272,38 +305,52 @@ class Tareitas(tk.Tk):
         tk.Label(body,text="Selecciona un día para ver y completar sus tareas.",bg=surface,fg=ink).pack(pady=18)
 
     def show_history(self):
-        win=tk.Toplevel(self); win.title("Historial"); win.geometry("420x480"); _,s,m,p,surface,ink=self.colors(); win.configure(bg=surface); tk.Label(win,text="Historial de cumplimiento",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(pady=16)
-        for item in self.db.history(): tk.Label(win,text=f"✓  {item['day']}  ·  {item['title']}",bg=s,fg=ink,anchor="w",padx=10,pady=8).pack(fill="x",padx=18,pady=4)
+        self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Historial",self.show_home)
+        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=28,pady=20)
+        tk.Label(body,text="Historial de cumplimiento",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,12))
+        history=self.db.history()
+        if not history: tk.Label(body,text="Aún no hay tareas completadas.",bg=surface,fg=m,font=("Segoe UI",12)).pack(pady=35)
+        for item in history: tk.Label(body,text=f"✓  {item['day']}  ·  {item['title']}",bg=s,fg=ink,anchor="w",padx=14,pady=10).pack(fill="x",pady=4)
 
     def show_pomodoro(self):
-        win=tk.Toplevel(self); win.title("Pomodoro"); win.geometry("400x440"); _,s,m,p,surface,ink=self.colors(); win.configure(bg=surface); tk.Label(win,text="Pomodoro",bg=surface,fg=ink,font=("Segoe UI",24,"bold")).pack(pady=15)
-        names=["Sin tarea asociada"]+[row[0] for row in self.db.conn.execute("SELECT title FROM tasks WHERE active=1 ORDER BY title")]; choice=tk.StringVar(value=names[0]); ttk.Combobox(win,textvariable=choice,values=names,state="readonly").pack(fill="x",padx=30,pady=5); custom=tk.StringVar(); tk.Entry(win,textvariable=custom,bg=surface,fg=ink,insertbackground=ink).pack(fill="x",padx=30,pady=5)
+        self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Pomodoro",self.show_home)
+        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=20)
+        tk.Label(body,text="Enfócate a tu ritmo",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,12))
+        tk.Label(body,text="Tarea asociada (opcional)",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w")
+        names=["Sin tarea asociada"]+[row[0] for row in self.db.conn.execute("SELECT title FROM tasks WHERE active=1 ORDER BY title")]; choice=tk.StringVar(value=names[0]); ttk.Combobox(body,textvariable=choice,values=names,state="readonly").pack(fill="x",pady=(3,8)); custom=tk.StringVar(); tk.Entry(body,textvariable=custom,bg=surface,fg=ink,insertbackground=ink).pack(fill="x",pady=(0,10))
         work,rest,cycles=tk.IntVar(value=25),tk.IntVar(value=5),tk.IntVar(value=4)
         for label,var,limit in (("Trabajo (min)",work,180),("Descanso (min)",rest,90),("Ciclos",cycles,12)):
-            row=tk.Frame(win,bg=surface); row.pack(fill="x",padx=30,pady=5); tk.Label(row,text=label,bg=surface,fg=ink).pack(side="left"); tk.Spinbox(row,from_=1,to=limit,textvariable=var,width=7).pack(side="right")
-        status=tk.Label(win,text="Listo para comenzar",bg=surface,fg=ink,font=("Segoe UI",16,"bold")); status.pack(pady=18); state={"cycle":1,"break":False,"left":0,"title":""}
+            row=tk.Frame(body,bg=surface); row.pack(fill="x",pady=5); tk.Label(row,text=label,bg=surface,fg=ink).pack(side="left"); tk.Spinbox(row,from_=1,to=limit,textvariable=var,width=7).pack(side="right")
+        status=tk.Label(body,text="Listo para comenzar",bg=surface,fg=ink,font=("Segoe UI",16,"bold")); status.pack(pady=18); state={"cycle":1,"break":False,"left":0,"title":""}
         def tick():
             state["left"]-=1; mins,secs=divmod(max(state["left"],0),60); status.config(text=f"{mins:02d}:{secs:02d} · ciclo {state['cycle']}/{cycles.get()}")
-            if state["left"]>0: win.after(1000,tick); return
+            if state["left"]>0: self.after(1000,tick); return
             if state["break"]: state["break"]=False; state["cycle"]+=1
-            elif state["cycle"]>=cycles.get(): self.db.save_pomodoro(state["title"],work.get(),rest.get(),cycles.get()); messagebox.showinfo("Pomodoro","¡Ciclo completado!"); return
+            elif state["cycle"]>=cycles.get(): self.db.save_pomodoro(state["title"],work.get(),rest.get(),cycles.get()); status.config(text="¡Pomodoro completado!"); return
             else: state["break"]=True
-            state["left"]=(rest.get() if state["break"] else work.get())*60; win.after(1000,tick)
+            state["left"]=(rest.get() if state["break"] else work.get())*60; self.after(1000,tick)
         def start():
             state.update(cycle=1,break_=False); state["break"]=False; state["title"]=custom.get().strip() or (choice.get() if choice.get()!=names[0] else f"Ciclo Pomodoro {self.db.pomodoro_number()}"); state["left"]=work.get()*60; tick()
-        ttk.Button(win,text="Iniciar",style="Accent.TButton",command=start).pack(fill="x",padx=30,pady=10)
+        ttk.Button(body,text="Iniciar",style="Accent.TButton",command=start).pack(fill="x",pady=10)
 
-    def appearance(self):
-        win=tk.Toplevel(self); win.title("Apariencia"); win.geometry("300x420"); _,_,_,p,surface,ink=self.colors(); win.configure(bg=surface); tk.Label(win,text="Apariencia",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(pady=15)
-        for name in PALETTES: ttk.Button(win,text=name,command=lambda n=name:(setattr(self,"palette_name",n),self.apply_theme(),self.show_home(),win.destroy())).pack(fill="x",padx=25,pady=3)
-        dark=tk.BooleanVar(value=self.dark); tk.Checkbutton(win,text="Modo oscuro",variable=dark,bg=surface,fg=ink,command=lambda:(setattr(self,"dark",dark.get()),self.apply_theme(),self.show_home(),win.destroy())).pack(pady=12)
-        tk.Label(win,text="Avisos de tareas pendientes",bg=surface,fg=ink,font=("Segoe UI",11,"bold")).pack(pady=(8,2))
+    def show_appearance(self):
+        self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Apariencia",self.show_home)
+        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=18)
+        tk.Label(body,text="Elige tu paleta",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,8))
+        def select_palette(name):
+            self.palette_name=name; self.db.set_setting("palette",name); self.apply_theme(); self.show_appearance()
+        for name in PALETTES: tk.Button(body,text=name,command=lambda n=name:select_palette(n),bg=s if name != self.palette_name else self.colors()[0],fg=ink if name != self.palette_name else "white",activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold"),pady=8).pack(fill="x",pady=3)
+        dark=tk.BooleanVar(value=self.dark)
+        def toggle_dark():
+            self.dark=dark.get(); self.db.set_setting("dark","1" if self.dark else "0"); self.apply_theme(); self.show_appearance()
+        tk.Checkbutton(body,text="Modo oscuro",variable=dark,bg=surface,fg=ink,command=toggle_dark,selectcolor=surface,font=("Segoe UI",11,"bold")).pack(anchor="w",pady=(12,6))
+        tk.Label(body,text="Avisos de tareas pendientes",bg=surface,fg=ink,font=("Segoe UI",11,"bold")).pack(anchor="w",pady=(8,2))
         frequency=tk.IntVar(value=self.notice_minutes)
         def apply_frequency():
-            self.notice_minutes=frequency.get(); messagebox.showinfo(APP,f"Los avisos se mostrarán cada {self.notice_minutes // 60} hora(s).")
-        tk.Radiobutton(win,text="Cada 1 hora",variable=frequency,value=60,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack()
-        tk.Radiobutton(win,text="Cada 2 horas",variable=frequency,value=120,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack()
-        tk.Button(win,text="Mostrar widget de pendientes",command=self.show_mini_widget,bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold")).pack(fill="x",padx=25,pady=(13,4))
+            self.notice_minutes=frequency.get(); self.db.set_setting("notice_minutes",str(self.notice_minutes))
+        tk.Radiobutton(body,text="Cada 1 hora",variable=frequency,value=60,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
+        tk.Radiobutton(body,text="Cada 2 horas",variable=frequency,value=120,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
+        tk.Button(body,text="Mostrar widget de pendientes",command=self.show_mini_widget,bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold"),pady=9).pack(fill="x",pady=(13,4))
 
     def show_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists():
