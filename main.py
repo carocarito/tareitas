@@ -141,7 +141,7 @@ class Tareitas(tk.Tk):
         super().__init__(); self.title(APP); self.geometry("620x850"); self.minsize(540, 720)
         # En pantallas Windows de alta densidad Tk amplía las fuentes en
         # exceso. Esta escala conserva nitidez y las reduce de forma pareja.
-        self.tk.call("tk", "scaling", 1.14)
+        self.tk.call("tk", "scaling", 1.17)
         self.db, self.day = Database(), date.today()
         saved_palette=self.db.setting("palette", "Violeta / Lavanda")
         self.palette_name = saved_palette if saved_palette in PALETTES else "Violeta / Lavanda"
@@ -215,13 +215,13 @@ class Tareitas(tk.Tk):
 
     def show_home(self):
         self.clear(); a,s,m,p,surface,ink = self.colors()
-        hero = tk.Frame(self.container,bg=a,height=214); hero.pack(fill="x"); hero.pack_propagate(False)
+        hero = tk.Frame(self.container,bg=a,height=190); hero.pack(fill="x"); hero.pack_propagate(False)
         tk.Button(hero,text="▦",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,19,"bold"),cursor="hand2").place(x=35,y=35)
         appearance = tk.Button(hero,text="🎨",command=self.show_appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2")
         appearance.place(relx=1.0,x=-58,y=30,width=42,height=42)
-        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=(APP_FONT,19,"bold")).place(relx=.5,y=34,anchor="n")
-        tk.Label(hero,text="Hoy",bg=a,fg="white",font=(APP_FONT,32,"bold")).place(x=31,y=142)
-        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=(APP_FONT,13)).place(x=33,y=186)
+        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=(APP_FONT,19,"bold")).place(relx=.5,y=28,anchor="n")
+        tk.Label(hero,text="Hoy",bg=a,fg="white",font=(APP_FONT,32,"bold")).place(x=31,y=120)
+        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=(APP_FONT,13)).place(x=33,y=161)
         body = tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True)
         local_label = tk.Label(body,text="Modo local",bg=surface,fg=m,font=("Segoe UI",10)); local_label.pack(anchor="e",padx=34,pady=(27,0))
         days=tk.Frame(body,bg=surface); days.pack(fill="x",padx=22,pady=(12,18))
@@ -242,7 +242,10 @@ class Tareitas(tk.Tk):
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
         progress_ink="#f7f4fa" if self.dark else m
-        if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=progress_ink,font=(APP_FONT,11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
+        if tasks:
+            counters=tk.Frame(body,bg=surface); counters.pack(anchor="w",padx=28,pady=(10,4))
+            tk.Label(counters,text=f"{len(tasks)-done} pendientes",bg=a,fg="white",font=(APP_FONT,11,"bold"),padx=12,pady=8).pack(side="left",padx=(0,8))
+            tk.Label(counters,text=f"{done} terminadas",bg=s,fg=progress_ink,font=(APP_FONT,11,"bold"),padx=12,pady=8).pack(side="left")
         # El pie se reserva antes de la zona desplazable para que nunca quede
         # fuera de la ventana, incluso cuando una lista tenga muchas tareas.
         foot=tk.Frame(body,bg=surface,height=100); foot.pack(fill="x",side="bottom",padx=28,pady=(5,18)); foot.pack_propagate(False)
@@ -279,9 +282,9 @@ class Tareitas(tk.Tk):
             width=max(card.winfo_width(),300); rounded_box(card,0,1,width-2,72,14,soft)
             mark="☑" if completed else "☐"
             card.create_text(20,23,text=mark,fill=title_color,font=("Segoe UI Symbol",15),anchor="center",tags=("toggle",))
-            card.create_text(42,21,text=task["title"],fill=title_color,font=(APP_FONT,10,"bold"),anchor="w",tags=("toggle",))
-            card.create_text(44,47,text=detail,fill=detail_color,font=(APP_FONT,8),anchor="w",tags=("toggle",))
-            card.create_text(width-54,34,text="Editar",fill=title_color,font=(APP_FONT,8,"bold"),anchor="center",tags=("edit",))
+            card.create_text(42,21,text=task["title"],fill=title_color,font=(APP_FONT,11,"bold"),anchor="w",tags=("toggle",))
+            card.create_text(44,47,text=detail,fill=detail_color,font=(APP_FONT,9),anchor="w",tags=("toggle",))
+            card.create_text(width-54,34,text="Editar",fill=title_color,font=(APP_FONT,9,"bold"),anchor="center",tags=("edit",))
         card.bind("<Configure>",render)
         card.tag_bind("toggle","<Button-1>",lambda _e:self.complete(task["id"],not completed))
         card.tag_bind("edit","<Button-1>",lambda _e:self.show_task_form(task["category"],task))
