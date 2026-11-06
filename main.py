@@ -141,7 +141,7 @@ class Tareitas(tk.Tk):
         super().__init__(); self.title(APP); self.geometry("620x850"); self.minsize(540, 720)
         # En pantallas Windows de alta densidad Tk amplía las fuentes en
         # exceso. Esta escala conserva nitidez y las reduce de forma pareja.
-        self.tk.call("tk", "scaling", 1.20)
+        self.tk.call("tk", "scaling", 1.23)
         self.db, self.day = Database(), date.today()
         saved_palette=self.db.setting("palette", "Violeta / Lavanda")
         self.palette_name = saved_palette if saved_palette in PALETTES else "Violeta / Lavanda"
@@ -215,13 +215,13 @@ class Tareitas(tk.Tk):
 
     def show_home(self):
         self.clear(); a,s,m,p,surface,ink = self.colors()
-        hero = tk.Frame(self.container,bg=a,height=190); hero.pack(fill="x"); hero.pack_propagate(False)
+        hero = tk.Frame(self.container,bg=a,height=170); hero.pack(fill="x"); hero.pack_propagate(False)
         tk.Button(hero,text="▦",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,19,"bold"),cursor="hand2").place(x=35,y=35)
         appearance = tk.Button(hero,text="🎨",command=self.show_appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2")
         appearance.place(relx=1.0,x=-58,y=30,width=42,height=42)
-        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=(APP_FONT,19,"bold")).place(relx=.5,y=28,anchor="n")
-        tk.Label(hero,text="Hoy",bg=a,fg="white",font=(APP_FONT,32,"bold")).place(x=31,y=120)
-        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=(APP_FONT,13)).place(x=33,y=161)
+        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=(APP_FONT,19,"bold")).place(relx=.5,y=22,anchor="n")
+        tk.Label(hero,text="Hoy",bg=a,fg="white",font=(APP_FONT,32,"bold")).place(x=31,y=98)
+        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=(APP_FONT,13)).place(x=33,y=140)
         body = tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True)
         local_label = tk.Label(body,text="Modo local",bg=surface,fg=m,font=("Segoe UI",10)); local_label.pack(anchor="e",padx=34,pady=(27,0))
         days=tk.Frame(body,bg=surface); days.pack(fill="x",padx=22,pady=(12,18))
@@ -238,7 +238,7 @@ class Tareitas(tk.Tk):
             else: self.show_mini_widget()
             self.show_home()
         self.rounded_action(quick,"▾  Versión mini",toggle_widget_from_home,s,ink,165)
-        tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=(APP_FONT,25,"bold")).pack(anchor="w",padx=28)
+        tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=(APP_FONT,22,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
         progress_ink="#f7f4fa" if self.dark else m
