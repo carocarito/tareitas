@@ -223,7 +223,7 @@ class Tareitas(tk.Tk):
             if self.mini_widget and self.mini_widget.winfo_exists(): self.close_mini_widget()
             else: self.show_mini_widget()
             self.show_home()
-        self.rounded_action(quick,"▾  Widget",toggle_widget_from_home,s,ink,150)
+        self.rounded_action(quick,"▾  Versión mini",toggle_widget_from_home,s,ink,165)
         tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=("Segoe UI",25,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
@@ -429,7 +429,7 @@ class Tareitas(tk.Tk):
         tk.Radiobutton(body,text="Cada 1 hora",variable=frequency,value=60,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
         tk.Radiobutton(body,text="Cada 2 horas",variable=frequency,value=120,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
         widget_open=bool(self.mini_widget and self.mini_widget.winfo_exists())
-        widget_text="Cerrar widget de pendientes" if widget_open else "Abrir widget de pendientes"
+        widget_text="Cerrar versión mini" if widget_open else "Abrir versión mini"
         def toggle_widget():
             if self.mini_widget and self.mini_widget.winfo_exists(): self.close_mini_widget()
             else: self.show_mini_widget()
@@ -442,7 +442,7 @@ class Tareitas(tk.Tk):
         a,s,m,p,surface,ink = self.colors()
         widget=tk.Toplevel(self)
         self.mini_widget=widget
-        widget.title("Pendientes de Tareitas")
+        widget.title("Tareitas · Versión mini")
         widget.attributes("-topmost", True)
         widget.resizable(False,False)
         width,height=330,72
