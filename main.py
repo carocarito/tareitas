@@ -123,6 +123,7 @@ class Tareitas(tk.Tk):
         self.tk.call("tk", "scaling", 1.15)
         self.db, self.day = Database(), date.today(); self.palette_name = "Violeta / Lavanda"; self.dark = False; self.notice_minutes = 120
         self.calendar_month = self.day.replace(day=1)
+        self.mini_widget = None
         self.style = ttk.Style(self); self.style.theme_use("clam")
         self.container = tk.Frame(self); self.container.pack(fill="both", expand=True)
         self.apply_theme(); self.show_home(); self.after(self.notice_minutes * 60_000, self.pending_notice)
@@ -168,6 +169,7 @@ class Tareitas(tk.Tk):
             tk.Button(days,text=f"{current.day:02d}\n{WEEKDAYS[current.weekday()].lower()}",command=lambda d=current:self.set_day(d),bg=a if selected else s,fg="white" if selected else ink,activebackground=a if selected else s,activeforeground="white" if selected else ink,border=0,highlightthickness=0,width=7,height=3,font=("Segoe UI",11,"bold"),cursor="hand2").pack(side="left",padx=5)
         tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=("Segoe UI",25,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
+        self.update_mini_widget()
         if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=m,font=("Segoe UI",11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
         # El pie se reserva antes de la zona desplazable para que nunca quede
         # fuera de la ventana, incluso cuando una lista tenga muchas tareas.
@@ -196,9 +198,13 @@ class Tareitas(tk.Tk):
     def show_task_form(self,category,task=None):
         self.clear(); a,s,m,p,surface,ink=self.colors(); self.header(self.container,"Editar tarea" if task else "Crear tarea",self.show_categories); body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=14)
         selected=tk.StringVar(value=(task["start_date"] if task else self.day.isoformat())); self.month_grid(body,date.fromisoformat(selected.get()),lambda d:selected.set(d.isoformat()))
-        tk.Label(body,text=f"{ICONS[category]}  {category}",bg=s,fg=m,font=("Segoe UI",16,"bold"),padx=14,pady=12).pack(fill="x",pady=10)
+        category_ink = "#ffffff" if self.dark else ink
+        tk.Label(body,text=f"{ICONS[category]}  {category}",bg=s,fg=category_ink,font=("Segoe UI",16,"bold"),padx=14,pady=12).pack(fill="x",pady=10)
         title=tk.StringVar(value=task["title"] if task else ""); desc=tk.Text(body,height=3,bg=surface,fg=ink,insertbackground=ink); desc.insert("1.0",task["description"] if task else "")
-        tk.Entry(body,textvariable=title,bg=surface,fg=ink,insertbackground=ink,font=("Segoe UI",11)).pack(fill="x",pady=5); desc.pack(fill="x",pady=5)
+        tk.Label(body,text="Nombre de la tarea *",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w",pady=(4,1))
+        tk.Entry(body,textvariable=title,bg=surface,fg=ink,insertbackground=ink,font=("Segoe UI",11)).pack(fill="x",pady=(0,7))
+        tk.Label(body,text="Descripción (opcional)",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w",pady=(0,1))
+        desc.pack(fill="x",pady=(0,5))
         advanced=tk.LabelFrame(body,text="Repetición, horas y fecha de fin",bg=surface,fg=ink,padx=8,pady=8); advanced.pack(fill="x",pady=8); weekdays=[]
         row=tk.Frame(advanced,bg=surface); row.pack(); old=(task["weekdays"].split(",") if task else [])
         for i,name in enumerate(WEEKDAYS):
@@ -274,6 +280,36 @@ class Tareitas(tk.Tk):
             self.notice_minutes=frequency.get(); messagebox.showinfo(APP,f"Los avisos se mostrarán cada {self.notice_minutes // 60} hora(s).")
         tk.Radiobutton(win,text="Cada 1 hora",variable=frequency,value=60,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack()
         tk.Radiobutton(win,text="Cada 2 horas",variable=frequency,value=120,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack()
+        tk.Button(win,text="Mostrar widget de pendientes",command=self.show_mini_widget,bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold")).pack(fill="x",padx=25,pady=(13,4))
+
+    def show_mini_widget(self):
+        if self.mini_widget and self.mini_widget.winfo_exists():
+            self.mini_widget.deiconify(); self.mini_widget.lift(); self.update_mini_widget(); return
+        a,s,m,p,surface,ink = self.colors()
+        widget=tk.Toplevel(self)
+        self.mini_widget=widget
+        widget.title("Pendientes de Tareitas")
+        widget.attributes("-topmost", True)
+        widget.resizable(False,False)
+        width,height=300,72
+        widget.geometry(f"{width}x{height}+{max(widget.winfo_screenwidth()-width-28,0)}+{42}")
+        widget.configure(bg=a)
+        content=tk.Frame(widget,bg=a); content.pack(fill="both",expand=True,padx=12,pady=8)
+        self.mini_text=tk.Label(content,bg=a,fg="white",font=("Segoe UI",11,"bold"),anchor="w")
+        self.mini_text.pack(side="left",fill="both",expand=True)
+        tk.Button(content,text="×",command=self.close_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2").pack(side="right")
+        widget.protocol("WM_DELETE_WINDOW",self.close_mini_widget)
+        self.update_mini_widget()
+
+    def close_mini_widget(self):
+        if self.mini_widget and self.mini_widget.winfo_exists(): self.mini_widget.destroy()
+        self.mini_widget=None
+
+    def update_mini_widget(self):
+        if not self.mini_widget or not self.mini_widget.winfo_exists(): return
+        pending=sum(not self.db.completed(task["id"],date.today()) for task in self.db.due(date.today()))
+        plural="tarea pendiente" if pending == 1 else "tareas pendientes"
+        self.mini_text.config(text=f"Tareitas  ·  {pending} {plural} hoy")
 
     def pending_notice(self):
         pending=[t for t in self.db.due(date.today()) if not self.db.completed(t["id"],date.today())]
