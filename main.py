@@ -167,18 +167,19 @@ class Tareitas(tk.Tk):
         tk.Label(bar, text=title, bg=a, fg="white", font=("Segoe UI",24,"bold")).place(relx=.5,y=25,anchor="n")
         return bar
 
-    def rounded_action(self, parent, text, command, bg, fg, width=150):
+    def rounded_action(self, parent, text, command, bg, fg, width=150, height=46, vertical=False):
         """Botón Canvas para esquinas suaves sin depender de controles nativos."""
-        canvas=tk.Canvas(parent,bg=parent.cget("bg"),height=46,width=width,highlightthickness=0,cursor="hand2")
-        canvas.pack(side="left",padx=5)
+        canvas=tk.Canvas(parent,bg=parent.cget("bg"),height=height,width=width,highlightthickness=0,cursor="hand2")
+        if vertical: canvas.pack(fill="x",pady=6)
+        else: canvas.pack(side="left",padx=5)
         def render(_event=None):
-            canvas.delete("all"); w=max(canvas.winfo_width(),width); r=13
+            canvas.delete("all"); w=max(canvas.winfo_width(),width); r=min(14,height//2)
             canvas.create_arc(0,0,2*r,2*r,start=90,extent=90,fill=bg,outline=bg)
             canvas.create_arc(w-2*r,0,w,2*r,start=0,extent=90,fill=bg,outline=bg)
-            canvas.create_arc(0,46-2*r,2*r,46,start=180,extent=90,fill=bg,outline=bg)
-            canvas.create_arc(w-2*r,46-2*r,w,46,start=270,extent=90,fill=bg,outline=bg)
-            canvas.create_rectangle(r,0,w-r,46,fill=bg,outline=bg); canvas.create_rectangle(0,r,w,46-r,fill=bg,outline=bg)
-            canvas.create_text(w/2,23,text=text,fill=fg,font=("Segoe UI",10,"bold"),tags=("action",))
+            canvas.create_arc(0,height-2*r,2*r,height,start=180,extent=90,fill=bg,outline=bg)
+            canvas.create_arc(w-2*r,height-2*r,w,height,start=270,extent=90,fill=bg,outline=bg)
+            canvas.create_rectangle(r,0,w-r,height,fill=bg,outline=bg); canvas.create_rectangle(0,r,w,height-r,fill=bg,outline=bg)
+            canvas.create_text(w/2,height/2,text=text,fill=fg,font=("Segoe UI",10,"bold"),tags=("action",))
         canvas.bind("<Configure>",render); canvas.bind("<Button-1>",lambda _e:command()); canvas.tag_bind("action","<Button-1>",lambda _e:command())
         return canvas
 
@@ -193,10 +194,12 @@ class Tareitas(tk.Tk):
         tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=("Segoe UI",12)).place(x=33,y=211)
         body = tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True)
         local_label = tk.Label(body,text="Modo local",bg=surface,fg=m,font=("Segoe UI",10)); local_label.pack(anchor="e",padx=34,pady=(27,0))
-        days=tk.Frame(body,bg=surface); days.pack(fill="x",padx=28,pady=(12,24))
-        for offset in range(-2,3):
+        days=tk.Frame(body,bg=surface); days.pack(fill="x",padx=22,pady=(12,18))
+        tk.Button(days,text="‹",command=lambda:self.set_day(self.day-timedelta(days=1)),bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",23,"bold"),cursor="hand2").pack(side="left",padx=(0,2))
+        for offset in range(-3,4):
             current=self.day+timedelta(days=offset); selected=current==self.day
-            tk.Button(days,text=f"{current.day:02d}\n{WEEKDAYS[current.weekday()].lower()}",command=lambda d=current:self.set_day(d),bg=a if selected else s,fg="white" if selected else ink,activebackground=a if selected else s,activeforeground="white" if selected else ink,border=0,highlightthickness=0,width=7,height=3,font=("Segoe UI",11,"bold"),cursor="hand2").pack(side="left",padx=5)
+            self.rounded_action(days,f"{current.day:02d}\n{WEEKDAYS[current.weekday()].lower()}",lambda d=current:self.set_day(d),a if selected else s,"white" if selected else ink,60,60)
+        tk.Button(days,text="›",command=lambda:self.set_day(self.day+timedelta(days=1)),bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",23,"bold"),cursor="hand2").pack(side="left",padx=(2,0))
         quick=tk.Frame(body,bg=surface); quick.pack(fill="x",padx=28,pady=(0,13))
         self.rounded_action(quick,"▦  Calendario",self.show_calendar,s,ink,155)
         self.rounded_action(quick,"⌛  Pomodoro",self.show_pomodoro,s,ink,155)
@@ -210,7 +213,7 @@ class Tareitas(tk.Tk):
         tk.Button(foot,text="Salir",command=self.destroy,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(x=0,y=31)
         tk.Button(foot,text="Historial",command=self.show_history,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=.47,y=31,anchor="n")
         tk.Button(foot,text="+",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",29,"bold"),cursor="hand2").place(relx=1.0,x=0,y=16,width=64,height=64,anchor="ne")
-        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); scroll=ttk.Scrollbar(body,orient="vertical",command=canvas.yview,style="Slim.Vertical.TScrollbar"); items=tk.Frame(canvas,bg=surface); items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0,0),window=items,anchor="nw"); canvas.configure(yscrollcommand=scroll.set); canvas.pack(side="left",fill="both",expand=True,padx=(28,0),pady=6); scroll.pack(side="right",fill="y",padx=(0,20))
+        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); items=tk.Frame(canvas,bg=surface); items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0,0),window=items,anchor="nw"); canvas.pack(fill="both",expand=True,padx=28,pady=6)
         self.bind_all("<MouseWheel>",lambda event:canvas.yview_scroll(int(-event.delta/120),"units"))
         if not tasks: tk.Label(items,text="No hay tareas para este día.",bg=surface,fg=m,font=("Segoe UI",13)).pack(pady=50)
         for task in tasks: self.task_card(items,task,s,m,ink)
@@ -249,7 +252,7 @@ class Tareitas(tk.Tk):
     def show_categories(self):
         self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Crear tarea",self.show_home); body=tk.Frame(self.container,bg=p); body.pack(fill="both",expand=True,padx=34,pady=22); tk.Label(body,text="Elige una actividad",bg=p,fg=ink,font=("Segoe UI",24,"bold")).pack(anchor="w",pady=(0,14)); counts=self.db.counts()
         for category in CATEGORIES:
-            tk.Button(body,text=f"{ICONS[category]}   {category}\n     {counts.get(category,0)} tareas",command=lambda c=category:self.show_task_form(c),bg=s,fg=ink,anchor="w",justify="left",font=("Segoe UI",14,"bold"),border=0,padx=18,pady=15).pack(fill="x",pady=8)
+            self.rounded_action(body,f"{ICONS[category]}   {category}   ·   {counts.get(category,0)} tareas",lambda c=category:self.show_task_form(c),s,ink,520,72,vertical=True)
 
     def show_task_form(self,category,task=None):
         self.clear(); a,s,m,p,surface,ink=self.colors(); self.header(self.container,"Editar tarea" if task else "Crear tarea",self.show_categories); body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=14)
@@ -283,16 +286,48 @@ class Tareitas(tk.Tk):
             self.db.save_task({"title":title.get(),"description":desc.get("1.0","end"),"category":category,"weekdays":chosen,"interval":interval.get(),"start":start,"end":finish,"start_time":start_time.get().strip(),"end_time":end_time.get().strip()},task["id"] if task else None); self.day=start; self.show_home()
         ttk.Button(body,text="Guardar tarea",style="Accent.TButton",command=save).pack(fill="x",pady=8)
 
-    def month_grid(self,parent,shown,choose,navigate=None):
+    def month_grid(self,parent,shown,choose,navigate=None,large=False):
+        """Calendario propio, más grande y con celdas redondeadas."""
         a,s,m,p,surface,ink=self.colors(); box=tk.Frame(parent,bg=surface); box.pack(fill="x")
-        nav=tk.Frame(box,bg=surface); nav.pack(fill="x")
-        if navigate: tk.Button(nav,text="‹",command=lambda:navigate(-1),bg=s,fg=ink,border=0,font=("Segoe UI",18,"bold"),width=3).pack(side="left")
-        tk.Label(nav,text=shown.strftime("%B %Y").capitalize(),bg=surface,fg=ink,font=("Segoe UI",15,"bold")).pack(side="left",expand=True)
-        if navigate: tk.Button(nav,text="›",command=lambda:navigate(1),bg=s,fg=ink,border=0,font=("Segoe UI",18,"bold"),width=3).pack(side="right")
-        grid=tk.Frame(box,bg=surface); grid.pack()
-        for col,name in enumerate(WEEKDAYS):tk.Label(grid,text=name,bg=surface,fg=m,width=5).grid(row=0,column=col)
-        for row,week in enumerate(calendar.Calendar(0).monthdatescalendar(shown.year,shown.month),1):
-            for col,current in enumerate(week): tk.Button(grid,text=str(current.day),command=lambda d=current:choose(d),bg=a if current==shown else s,fg="white" if current==shown else ink,border=0,width=4).grid(row=row,column=col,padx=2,pady=2)
+        height=400 if large else 210
+        canvas=tk.Canvas(box,bg=surface,height=height,highlightthickness=0); canvas.pack(fill="x")
+        state={"shown":shown}
+        def round_rect(x1,y1,x2,y2,r,fill):
+            canvas.create_arc(x1,y1,x1+2*r,y1+2*r,start=90,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x2-2*r,y1,x2,y1+2*r,start=0,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x1,y2-2*r,x1+2*r,y2,start=180,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x2-2*r,y2-2*r,x2,y2,start=270,extent=90,fill=fill,outline=fill)
+            canvas.create_rectangle(x1+r,y1,x2-r,y2,fill=fill,outline=fill); canvas.create_rectangle(x1,y1+r,x2,y2-r,fill=fill,outline=fill)
+        def shift(offset):
+            current=state["shown"]; month=current.month+offset; year=current.year
+            if month == 0: month,year=12,year-1
+            elif month == 13: month,year=1,year+1
+            state["shown"]=date(year,month,1)
+            if navigate: navigate(offset)
+            else: render()
+        def select_day(value):
+            state["shown"]=value; choose(value)
+            # En la pantalla Calendario la selección vuelve a Inicio y el
+            # canvas se destruye; en el formulario sí se redibuja al instante.
+            if not navigate: render()
+        def render(_event=None):
+            canvas.delete("all"); width=max(canvas.winfo_width(),420); margin=15; nav_h=54 if large else 42
+            round_rect(margin,4,margin+48,nav_h,12,s); round_rect(width-margin-48,4,width-margin,nav_h,12,s)
+            canvas.create_text(margin+24,29,text="‹",fill=ink,font=("Segoe UI",19,"bold"),tags=("prev",))
+            canvas.create_text(width-margin-24,29,text="›",fill=ink,font=("Segoe UI",19,"bold"),tags=("next",))
+            canvas.create_text(width/2,29,text=state["shown"].strftime("%B %Y").capitalize(),fill=ink,font=("Segoe UI",16,"bold"))
+            x0=margin; available=width-margin*2; cell_w=available/7; cell_h=48 if large else 19; y0=72 if large else 52
+            for col,name in enumerate(WEEKDAYS): canvas.create_text(x0+cell_w*(col+.5),y0,text=name,fill=m,font=("Segoe UI",9,"bold"))
+            weeks=calendar.Calendar(0).monthdatescalendar(state["shown"].year,state["shown"].month)
+            for row,week in enumerate(weeks):
+                for col,current in enumerate(week):
+                    x1=x0+col*cell_w+3; y1=y0+15+row*(cell_h+5); x2=x0+(col+1)*cell_w-3; y2=y1+cell_h
+                    active=current == state["shown"]
+                    round_rect(x1,y1,x2,y2,10,a if active else s)
+                    canvas.create_text((x1+x2)/2,(y1+y2)/2,text=str(current.day),fill="white" if active else ink,font=("Segoe UI",11 if large else 8,"bold"),tags=(f"day-{current.isoformat()}",))
+                    canvas.tag_bind(f"day-{current.isoformat()}","<Button-1>",lambda _event,d=current:select_day(d))
+            canvas.tag_bind("prev","<Button-1>",lambda _event:shift(-1)); canvas.tag_bind("next","<Button-1>",lambda _event:shift(1))
+        canvas.bind("<Configure>",render)
 
     def show_calendar(self):
         self.clear(); _,_,_,p,surface,ink=self.colors(); self.header(self.container,"Calendario",self.show_home); body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=20)
@@ -301,7 +336,7 @@ class Tareitas(tk.Tk):
             if month == 0: month,year=12,year-1
             elif month == 13: month,year=1,year+1
             self.calendar_month=date(year,month,1); self.show_calendar()
-        self.month_grid(body,self.calendar_month,lambda d:self.set_day(d),move)
+        self.month_grid(body,self.calendar_month,lambda d:self.set_day(d),move,large=True)
         tk.Label(body,text="Selecciona un día para ver y completar sus tareas.",bg=surface,fg=ink).pack(pady=18)
 
     def show_history(self):
@@ -339,7 +374,7 @@ class Tareitas(tk.Tk):
         tk.Label(body,text="Elige tu paleta",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,8))
         def select_palette(name):
             self.palette_name=name; self.db.set_setting("palette",name); self.apply_theme(); self.show_appearance()
-        for name in PALETTES: tk.Button(body,text=name,command=lambda n=name:select_palette(n),bg=s if name != self.palette_name else self.colors()[0],fg=ink if name != self.palette_name else "white",activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold"),pady=8).pack(fill="x",pady=3)
+        for name in PALETTES: self.rounded_action(body,name,lambda n=name:select_palette(n),s if name != self.palette_name else self.colors()[0],ink if name != self.palette_name else "white",520,40,vertical=True)
         dark=tk.BooleanVar(value=self.dark)
         def toggle_dark():
             self.dark=dark.get(); self.db.set_setting("dark","1" if self.dark else "0"); self.apply_theme(); self.show_appearance()
@@ -350,7 +385,13 @@ class Tareitas(tk.Tk):
             self.notice_minutes=frequency.get(); self.db.set_setting("notice_minutes",str(self.notice_minutes))
         tk.Radiobutton(body,text="Cada 1 hora",variable=frequency,value=60,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
         tk.Radiobutton(body,text="Cada 2 horas",variable=frequency,value=120,command=apply_frequency,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
-        tk.Button(body,text="Mostrar widget de pendientes",command=self.show_mini_widget,bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,font=("Segoe UI",10,"bold"),pady=9).pack(fill="x",pady=(13,4))
+        widget_open=bool(self.mini_widget and self.mini_widget.winfo_exists())
+        widget_text="Cerrar widget de pendientes" if widget_open else "Abrir widget de pendientes"
+        def toggle_widget():
+            if self.mini_widget and self.mini_widget.winfo_exists(): self.close_mini_widget()
+            else: self.show_mini_widget()
+            self.show_appearance()
+        self.rounded_action(body,widget_text,toggle_widget,s,ink,520,46,vertical=True)
 
     def show_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists():
