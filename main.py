@@ -183,9 +183,32 @@ class Tareitas(tk.Tk):
         for task in tasks: self.task_card(items,task,s,m,ink)
 
     def task_card(self,parent,task,soft,muted,ink):
-        frame=tk.Frame(parent,bg=soft,padx=14,pady=10); frame.pack(fill="x",pady=6); state=tk.BooleanVar(value=self.db.completed(task["id"],self.day)); tk.Checkbutton(frame,text=task["title"],variable=state,command=lambda:self.complete(task["id"],state.get()),bg=soft,fg=ink,selectcolor=soft,activebackground=soft,font=("Segoe UI",12,"bold")).grid(row=0,column=0,sticky="w")
-        detail=" · ".join(x for x in ([task["start_time"], task["description"] or f"{ICONS[task['category']]} {task['category']}"]) if x); tk.Label(frame,text=detail,bg=soft,fg=muted).grid(row=1,column=0,sticky="w",padx=28)
-        ttk.Button(frame,text="Editar",command=lambda:self.show_task_form(task["category"],task)).grid(row=0,column=1,rowspan=2,padx=5)
+        # Canvas permite tarjetas redondeadas reales; los controles nativos de
+        # Tkinter solo pueden ser rectangulares.
+        card=tk.Canvas(parent,bg=parent.cget("bg"),height=84,highlightthickness=0,cursor="hand2")
+        card.pack(fill="x",pady=6)
+        completed=self.db.completed(task["id"],self.day)
+        detail=" · ".join(x for x in ([task["start_time"], task["description"] or f"{ICONS[task['category']]} {task['category']}"]) if x)
+        title_color="#f7f4fa" if self.dark else ink
+        detail_color="#dde5f2" if self.dark else muted
+        def rounded_box(canvas,x1,y1,x2,y2,r,fill):
+            canvas.create_arc(x1,y1,x1+2*r,y1+2*r,start=90,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x2-2*r,y1,x2,y1+2*r,start=0,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x1,y2-2*r,x1+2*r,y2,start=180,extent=90,fill=fill,outline=fill)
+            canvas.create_arc(x2-2*r,y2-2*r,x2,y2,start=270,extent=90,fill=fill,outline=fill)
+            canvas.create_rectangle(x1+r,y1,x2-r,y2,fill=fill,outline=fill)
+            canvas.create_rectangle(x1,y1+r,x2,y2-r,fill=fill,outline=fill)
+        def render(_event=None):
+            card.delete("all")
+            width=max(card.winfo_width(),300); rounded_box(card,0,1,width-2,82,14,soft)
+            mark="☑" if completed else "☐"
+            card.create_text(20,27,text=mark,fill=title_color,font=("Segoe UI Symbol",17),anchor="center",tags=("toggle",))
+            card.create_text(42,24,text=task["title"],fill=title_color,font=("Segoe UI",11,"bold"),anchor="w",tags=("toggle",))
+            card.create_text(44,52,text=detail,fill=detail_color,font=("Segoe UI",9),anchor="w",tags=("toggle",))
+            card.create_text(width-54,39,text="Editar",fill=title_color,font=("Segoe UI",9,"bold"),anchor="center",tags=("edit",))
+        card.bind("<Configure>",render)
+        card.tag_bind("toggle","<Button-1>",lambda _e:self.complete(task["id"],not completed))
+        card.tag_bind("edit","<Button-1>",lambda _e:self.show_task_form(task["category"],task))
 
     def set_day(self,d): self.day=d; self.show_home()
     def complete(self,tid,value): self.db.toggle(tid,self.day,value); self.show_home()
