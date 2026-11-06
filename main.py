@@ -77,6 +77,20 @@ class Database:
         if "reminder_minutes" not in columns:
             self.conn.execute("ALTER TABLE tasks ADD COLUMN reminder_minutes INTEGER NOT NULL DEFAULT 0")
         self.conn.commit()
+        self.seed_example_task()
+
+    def seed_example_task(self) -> None:
+        """Incluye una única tarea guía solo para perfiles locales nuevos."""
+        seeded=self.setting("example_task_seeded","0")
+        total=self.conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+        if seeded == "1": return
+        if total == 0:
+            self.conn.execute(
+                "INSERT INTO tasks(title,description,category,start_date) VALUES(?,?,?,?)",
+                ("Ejemplo: organiza tu día", "Puedes editar esta tarea o eliminarla cuando crees las tuyas.", "General", date.today().isoformat()),
+            )
+            self.conn.commit()
+        self.set_setting("example_task_seeded","1")
 
     def setting(self, key: str, default: str) -> str:
         row=self.conn.execute("SELECT value FROM settings WHERE key=?",(key,)).fetchone()
@@ -105,6 +119,12 @@ class Database:
             self.conn.execute("UPDATE tasks SET title=?,description=?,category=?,weekdays=?,interval_days=?,start_date=?,end_date=?,start_time=?,end_time=?,reminder_minutes=? WHERE id=?", (*fields, task_id))
         else:
             self.conn.execute("INSERT INTO tasks(title,description,category,weekdays,interval_days,start_date,end_date,start_time,end_time,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?)", fields)
+        self.conn.commit()
+
+    def delete_task(self, task_id: int) -> None:
+        self.conn.execute("DELETE FROM completions WHERE task_id=?",(task_id,))
+        self.conn.execute("DELETE FROM deadline_alerts WHERE task_id=?",(task_id,))
+        self.conn.execute("DELETE FROM tasks WHERE id=?",(task_id,))
         self.conn.commit()
 
     def completed(self, task_id: int, target: date) -> bool:
@@ -342,6 +362,11 @@ class Tareitas(tk.Tk):
             if finish and finish<start:return messagebox.showwarning(APP,"La fecha de fin debe ser posterior.")
             self.db.save_task({"title":title.get(),"description":desc.get("1.0","end"),"category":category,"weekdays":chosen,"interval":interval.get(),"start":start,"end":finish,"start_time":start_time.get().strip() if schedule_enabled.get() else "","end_time":end_time.get().strip() if schedule_enabled.get() else "","reminder_minutes":reminder.get() if schedule_enabled.get() else 0},task["id"] if task else None); self.day=start; self.show_home()
         ttk.Button(body,text="Guardar tarea",style="Accent.TButton",command=save).pack(fill="x",pady=8)
+        if task:
+            def delete():
+                if messagebox.askyesno(APP,f"¿Eliminar la tarea ‘{task['title']}’?"):
+                    self.db.delete_task(task["id"]); self.show_home()
+            tk.Button(body,text="Eliminar tarea",command=delete,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=(APP_FONT,11,"bold"),cursor="hand2").pack(pady=(2,8))
 
     def month_grid(self,parent,shown,choose,navigate=None,large=False):
         """Calendario propio, más grande y con celdas redondeadas."""
