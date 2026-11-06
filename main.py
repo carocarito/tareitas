@@ -150,6 +150,7 @@ class Tareitas(tk.Tk):
         self.mini_widget = None
         self.style = ttk.Style(self); self.style.theme_use("clam")
         self.container = tk.Frame(self); self.container.pack(fill="both", expand=True)
+        self.protocol("WM_DELETE_WINDOW",self.close_main_window)
         self.apply_theme(); self.show_home(); self.after(self.notice_minutes * 60_000, self.pending_notice); self.after(60_000, self.deadline_reminders)
 
     def colors(self):
@@ -382,14 +383,17 @@ class Tareitas(tk.Tk):
 
     def show_pomodoro(self):
         self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Pomodoro",self.show_home)
-        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=20)
-        tk.Label(body,text="Enfócate a tu ritmo",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,12))
+        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=26,pady=20)
+        tk.Label(body,text="Enfócate a tu ritmo",bg=surface,fg=ink,font=("Segoe UI",23,"bold")).pack(anchor="w",pady=(0,16))
         tk.Label(body,text="Tarea asociada (opcional)",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w")
         names=["Sin tarea asociada"]+[row[0] for row in self.db.conn.execute("SELECT title FROM tasks WHERE active=1 ORDER BY title")]; choice=tk.StringVar(value=names[0]); ttk.Combobox(body,textvariable=choice,values=names,state="readonly").pack(fill="x",pady=(3,8)); custom=tk.StringVar(); tk.Entry(body,textvariable=custom,bg=surface,fg=ink,insertbackground=ink).pack(fill="x",pady=(0,10))
         work,rest,cycles=tk.IntVar(value=25),tk.IntVar(value=5),tk.IntVar(value=4)
+        controls=tk.Frame(body,bg=surface); controls.pack(fill="x",pady=(5,10))
         for label,var,limit in (("Trabajo (min)",work,180),("Descanso (min)",rest,90),("Ciclos",cycles,12)):
-            row=tk.Frame(body,bg=surface); row.pack(fill="x",pady=5); tk.Label(row,text=label,bg=surface,fg=ink).pack(side="left"); tk.Spinbox(row,from_=1,to=limit,textvariable=var,width=7).pack(side="right")
-        status=tk.Label(body,text="Listo para comenzar",bg=surface,fg=ink,font=("Segoe UI",16,"bold")); status.pack(pady=18); state={"cycle":1,"break":False,"left":0,"title":""}
+            row=tk.Frame(controls,bg=surface); row.pack(fill="x",pady=7); tk.Label(row,text=label,bg=surface,fg=ink,font=("Segoe UI",11,"bold")).pack(side="left"); tk.Spinbox(row,from_=1,to=limit,textvariable=var,width=8,font=("Segoe UI",11)).pack(side="right")
+        timer_card=tk.Frame(body,bg=s,height=230); timer_card.pack(fill="both",expand=True,pady=(10,16)); timer_card.pack_propagate(False)
+        tk.Label(timer_card,text="POMODORO",bg=s,fg=ink,font=("Segoe UI",11,"bold")).place(relx=.5,rely=.28,anchor="center")
+        status=tk.Label(timer_card,text="Listo para comenzar",bg=s,fg=ink,font=("Segoe UI",22,"bold")); status.place(relx=.5,rely=.55,anchor="center"); state={"cycle":1,"break":False,"left":0,"title":""}
         def tick():
             state["left"]-=1; mins,secs=divmod(max(state["left"],0),60); status.config(text=f"{mins:02d}:{secs:02d} · ciclo {state['cycle']}/{cycles.get()}")
             if state["left"]>0: self.after(1000,tick); return
@@ -399,7 +403,7 @@ class Tareitas(tk.Tk):
             state["left"]=(rest.get() if state["break"] else work.get())*60; self.after(1000,tick)
         def start():
             state.update(cycle=1,break_=False); state["break"]=False; state["title"]=custom.get().strip() or (choice.get() if choice.get()!=names[0] else f"Ciclo Pomodoro {self.db.pomodoro_number()}"); state["left"]=work.get()*60; tick()
-        ttk.Button(body,text="Iniciar",style="Accent.TButton",command=start).pack(fill="x",pady=10)
+        ttk.Button(body,text="Iniciar",style="Accent.TButton",command=start).pack(fill="x",pady=(0,4),ipady=7)
 
     def show_appearance(self):
         self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Apariencia",self.show_home)
@@ -441,13 +445,29 @@ class Tareitas(tk.Tk):
         content=tk.Frame(widget,bg=a); content.pack(fill="both",expand=True,padx=12,pady=8)
         self.mini_text=tk.Label(content,bg=a,fg="white",font=("Segoe UI",11,"bold"),anchor="w")
         self.mini_text.pack(side="left",fill="both",expand=True)
-        tk.Button(content,text="×",command=self.close_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2").pack(side="right")
-        widget.protocol("WM_DELETE_WINDOW",self.close_mini_widget)
+        tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2").pack(side="right")
+        content.bind("<Button-1>",lambda _event:self.restore_from_widget())
+        self.mini_text.bind("<Button-1>",lambda _event:self.restore_from_widget())
+        widget.protocol("WM_DELETE_WINDOW",self.exit_app)
         self.update_mini_widget()
 
     def close_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists(): self.mini_widget.destroy()
         self.mini_widget=None
+
+    def close_main_window(self):
+        """Con widget abierto, la ventana principal se oculta pero sigue viva."""
+        if self.mini_widget and self.mini_widget.winfo_exists():
+            self.withdraw()
+        else:
+            self.exit_app()
+
+    def restore_from_widget(self):
+        self.deiconify(); self.lift(); self.focus_force(); self.show_home()
+
+    def exit_app(self):
+        self.close_mini_widget()
+        self.destroy()
 
     def update_mini_widget(self):
         if not self.mini_widget or not self.mini_widget.winfo_exists(): return
@@ -471,6 +491,7 @@ class Tareitas(tk.Tk):
             if 0 < remaining <= minutes and not self.db.deadline_alert_was_sent(task["id"],today,minutes):
                 self.db.mark_deadline_alert_sent(task["id"],today,minutes)
                 messagebox.showinfo(APP,f"{task['title']} sigue pendiente.\nHora límite: {task['end_time']}.")
+        self.update_mini_widget()
         self.after(60_000,self.deadline_reminders)
 
 
