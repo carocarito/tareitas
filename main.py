@@ -191,7 +191,15 @@ class Tareitas(tk.Tk):
         self.style.configure("TButton", padding=9, font=(APP_FONT, 10, "bold"), background=s, foreground=ink, borderwidth=0)
         self.style.map("TButton", background=[("active", a)], foreground=[("active", "white")])
         self.style.configure("Accent.TButton", background=a, foreground="white"); self.style.configure("Soft.TButton", background=s, foreground=ink)
-        self.style.configure("TEntry", fieldbackground=surface, foreground=ink); self.style.configure("TCombobox", fieldbackground=surface, foreground=ink)
+        self.style.configure("TEntry", fieldbackground=surface, foreground=ink)
+        self.style.configure("TCombobox", fieldbackground=surface, background=s, foreground=ink, arrowcolor=ink, bordercolor=s, lightcolor=s, darkcolor=s)
+        self.style.map("TCombobox", fieldbackground=[("readonly",surface)], foreground=[("readonly",ink)], selectbackground=[("readonly",s)], selectforeground=[("readonly",ink)])
+        # El menú emergente del Combobox es nativo; estas opciones completan
+        # los colores que ttk no propaga automáticamente en Windows.
+        self.option_add("*TCombobox*Listbox.background",surface)
+        self.option_add("*TCombobox*Listbox.foreground",ink)
+        self.option_add("*TCombobox*Listbox.selectBackground",a)
+        self.option_add("*TCombobox*Listbox.selectForeground","white")
         self.style.configure("Slim.Vertical.TScrollbar", background=s, troughcolor=surface, borderwidth=0, arrowsize=9, width=8)
         self.after_idle(self.apply_window_chrome)
 
