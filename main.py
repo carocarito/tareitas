@@ -192,12 +192,12 @@ class Tareitas(tk.Tk):
         for child in self.container.winfo_children(): child.destroy()
 
     def header(self, parent, title, back=None):
-        a,_,_,_,_,_ = self.colors(); bar = tk.Frame(parent, bg=a, height=120); bar.pack(fill="x"); bar.pack_propagate(False)
-        if back: tk.Button(bar, text="←", command=back, bg=a, fg="white", border=0, font=(APP_FONT,18,"bold")).place(x=24,y=22)
-        tk.Label(bar, text=title, bg=a, fg="white", font=(APP_FONT,24,"bold")).place(relx=.5,y=25,anchor="n")
+        a,_,_,_,_,_ = self.colors(); bar = tk.Frame(parent, bg=a, height=94); bar.pack(fill="x"); bar.pack_propagate(False)
+        if back: tk.Button(bar, text="←", command=back, bg=a, fg="white", border=0, font=(APP_FONT,18,"bold")).place(x=24,y=10)
+        tk.Label(bar, text=title, bg=a, fg="white", font=(APP_FONT,24,"bold")).place(relx=.5,y=14,anchor="n")
         return bar
 
-    def rounded_action(self, parent, text, command, bg, fg, width=150, height=46, vertical=False):
+    def rounded_action(self, parent, text, command, bg, fg, width=150, height=46, vertical=False, font_size=10):
         """Botón Canvas para esquinas suaves sin depender de controles nativos."""
         canvas=tk.Canvas(parent,bg=parent.cget("bg"),height=height,width=width,highlightthickness=0,cursor="hand2")
         if vertical: canvas.pack(fill="x",pady=6)
@@ -209,7 +209,7 @@ class Tareitas(tk.Tk):
             canvas.create_arc(0,height-2*r,2*r,height,start=180,extent=90,fill=bg,outline=bg)
             canvas.create_arc(w-2*r,height-2*r,w,height,start=270,extent=90,fill=bg,outline=bg)
             canvas.create_rectangle(r,0,w-r,height,fill=bg,outline=bg); canvas.create_rectangle(0,r,w,height-r,fill=bg,outline=bg)
-            canvas.create_text(w/2,height/2,text=text,fill=fg,font=(APP_FONT,10,"bold"),tags=("action",))
+            canvas.create_text(w/2,height/2,text=text,fill=fg,font=(APP_FONT,font_size,"bold"),tags=("action",))
         canvas.bind("<Configure>",render); canvas.bind("<Button-1>",lambda _e:command()); canvas.tag_bind("action","<Button-1>",lambda _e:command())
         return canvas
 
@@ -295,19 +295,19 @@ class Tareitas(tk.Tk):
     def show_categories(self):
         self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Crear tarea",self.show_home); body=tk.Frame(self.container,bg=p); body.pack(fill="both",expand=True,padx=34,pady=22); tk.Label(body,text="Elige una actividad",bg=p,fg=ink,font=("Segoe UI",24,"bold")).pack(anchor="w",pady=(0,14)); counts=self.db.counts()
         for category in CATEGORIES:
-            self.rounded_action(body,f"{ICONS[category]}   {category}   ·   {counts.get(category,0)} tareas",lambda c=category:self.show_task_form(c),s,ink,520,72,vertical=True)
+            self.rounded_action(body,f"{ICONS[category]}   {category}   ·   {counts.get(category,0)} tareas",lambda c=category:self.show_task_form(c),s,ink,520,72,vertical=True,font_size=14)
 
     def show_task_form(self,category,task=None):
         self.clear(); a,s,m,p,surface,ink=self.colors(); self.header(self.container,"Editar tarea" if task else "Crear tarea",self.show_categories); body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=14)
         selected=tk.StringVar(value=(task["start_date"] if task else self.day.isoformat())); self.month_grid(body,date.fromisoformat(selected.get()),lambda d:selected.set(d.isoformat()))
         category_ink = "#ffffff" if self.dark else ink
         tk.Label(body,text=f"{ICONS[category]}  {category}",bg=s,fg=category_ink,font=("Segoe UI",16,"bold"),padx=14,pady=12).pack(fill="x",pady=10)
-        title=tk.StringVar(value=task["title"] if task else ""); desc=tk.Text(body,height=3,bg=surface,fg=ink,insertbackground=ink); desc.insert("1.0",task["description"] if task else "")
+        title=tk.StringVar(value=task["title"] if task else ""); desc=tk.Text(body,height=4,bg=surface,fg=ink,insertbackground=ink); desc.insert("1.0",task["description"] if task else "")
         tk.Label(body,text="Nombre de la tarea *",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w",pady=(4,1))
         tk.Entry(body,textvariable=title,bg=surface,fg=ink,insertbackground=ink,font=("Segoe UI",11)).pack(fill="x",pady=(0,7))
         tk.Label(body,text="Descripción (opcional)",bg=surface,fg=ink,font=("Segoe UI",10,"bold")).pack(anchor="w",pady=(0,1))
         desc.pack(fill="x",pady=(0,5))
-        advanced=tk.LabelFrame(body,text="Repetición, horas y fecha de fin",bg=surface,fg=ink,padx=8,pady=8); advanced.pack(fill="x",pady=8); weekdays=[]
+        advanced=tk.LabelFrame(body,text="Repetición, horas y fecha de fin",bg=surface,fg=ink,padx=10,pady=10); advanced.pack(fill="x",pady=8); weekdays=[]
         row=tk.Frame(advanced,bg=surface); row.pack(); old=(task["weekdays"].split(",") if task else [])
         for i,name in enumerate(WEEKDAYS):
             var=tk.BooleanVar(value=str(i) in old); weekdays.append(var); tk.Checkbutton(row,text=name,variable=var,bg=surface,fg=ink,selectcolor=surface).pack(side="left")
@@ -402,7 +402,8 @@ class Tareitas(tk.Tk):
         tk.Label(body,text="Historial de cumplimiento",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,12))
         history=self.db.history()
         if not history: tk.Label(body,text="Aún no hay tareas completadas.",bg=surface,fg=m,font=("Segoe UI",12)).pack(pady=35)
-        for item in history: tk.Label(body,text=f"✓  {item['day']}  ·  {item['title']}",bg=s,fg=ink,anchor="w",padx=14,pady=10).pack(fill="x",pady=4)
+        for item in history:
+            self.rounded_action(body,f"✓  {item['day']}  ·  {item['title']}",lambda:None,s,ink,520,64,vertical=True,font_size=12)
 
     def show_pomodoro(self):
         self.clear(); _,s,m,p,surface,ink=self.colors(); self.header(self.container,"Pomodoro",self.show_home)
@@ -434,7 +435,7 @@ class Tareitas(tk.Tk):
         tk.Label(body,text="Elige tu paleta",bg=surface,fg=ink,font=("Segoe UI",20,"bold")).pack(anchor="w",pady=(0,8))
         def select_palette(name):
             self.palette_name=name; self.db.set_setting("palette",name); self.apply_theme(); self.show_appearance()
-        for name in PALETTES: self.rounded_action(body,name,lambda n=name:select_palette(n),s if name != self.palette_name else self.colors()[0],ink if name != self.palette_name else "white",520,40,vertical=True)
+        for name in PALETTES: self.rounded_action(body,name,lambda n=name:select_palette(n),s if name != self.palette_name else self.colors()[0],ink if name != self.palette_name else "white",520,40,vertical=True,font_size=14)
         dark=tk.BooleanVar(value=self.dark)
         def toggle_dark():
             self.dark=dark.get(); self.db.set_setting("dark","1" if self.dark else "0"); self.apply_theme(); self.show_appearance()
@@ -451,7 +452,7 @@ class Tareitas(tk.Tk):
             if self.mini_widget and self.mini_widget.winfo_exists(): self.close_mini_widget()
             else: self.show_mini_widget()
             self.show_appearance()
-        self.rounded_action(body,widget_text,toggle_widget,s,ink,520,46,vertical=True)
+        self.rounded_action(body,widget_text,toggle_widget,s,ink,520,46,vertical=True,font_size=14)
 
     def show_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists():
