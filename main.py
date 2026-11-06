@@ -23,6 +23,7 @@ if sys.platform == "win32":
             pass
 
 APP = "Tareitas"
+APP_FONT = "Segoe UI Variable"
 WEEKDAYS = ("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
 CATEGORIES = ("General", "Idea", "Comida", "Trabajo", "Deporte", "Música")
 ICONS = {"General": "✓", "Idea": "💡", "Comida": "☕", "Trabajo": "▣", "Deporte": "⚽", "Música": "♫"}
@@ -140,7 +141,7 @@ class Tareitas(tk.Tk):
         super().__init__(); self.title(APP); self.geometry("620x850"); self.minsize(540, 720)
         # En pantallas Windows de alta densidad Tk amplía las fuentes en
         # exceso. Esta escala conserva nitidez y las reduce de forma pareja.
-        self.tk.call("tk", "scaling", 1.07)
+        self.tk.call("tk", "scaling", 1.10)
         self.db, self.day = Database(), date.today()
         saved_palette=self.db.setting("palette", "Violeta / Lavanda")
         self.palette_name = saved_palette if saved_palette in PALETTES else "Violeta / Lavanda"
@@ -166,12 +167,25 @@ class Tareitas(tk.Tk):
         # fondo correcto para que no aparezca un marco blanco en modo oscuro.
         if hasattr(self, "container"): self.container.configure(bg=p)
         self.style.configure("TFrame", background=p); self.style.configure("Card.TFrame", background=surface)
-        self.style.configure("TLabel", background=p, foreground=ink, font=("Segoe UI", 11)); self.style.configure("Title.TLabel", font=("Segoe UI", 25, "bold"), foreground=ink)
-        self.style.configure("TButton", padding=9, font=("Segoe UI", 10, "bold"), background=s, foreground=ink, borderwidth=0)
+        self.style.configure("TLabel", background=p, foreground=ink, font=(APP_FONT, 11)); self.style.configure("Title.TLabel", font=(APP_FONT, 25, "bold"), foreground=ink)
+        self.style.configure("TButton", padding=9, font=(APP_FONT, 10, "bold"), background=s, foreground=ink, borderwidth=0)
         self.style.map("TButton", background=[("active", a)], foreground=[("active", "white")])
         self.style.configure("Accent.TButton", background=a, foreground="white"); self.style.configure("Soft.TButton", background=s, foreground=ink)
         self.style.configure("TEntry", fieldbackground=surface, foreground=ink); self.style.configure("TCombobox", fieldbackground=surface, foreground=ink)
         self.style.configure("Slim.Vertical.TScrollbar", background=s, troughcolor=surface, borderwidth=0, arrowsize=9, width=8)
+        self.after_idle(self.apply_window_chrome)
+
+    def apply_window_chrome(self, window=None):
+        """Sincroniza la barra nativa de Windows con el modo de la app."""
+        if sys.platform != "win32": return
+        try:
+            target=window or self; value=ctypes.c_int(1 if self.dark else 0)
+            hwnd=target.winfo_id()
+            # 20 es la variante actual de Windows 11; 19 cubre Windows 10.
+            result=ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd,20,ctypes.byref(value),ctypes.sizeof(value))
+            if result: ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd,19,ctypes.byref(value),ctypes.sizeof(value))
+        except (AttributeError, OSError):
+            pass
 
     def clear(self):
         self.unbind_all("<MouseWheel>")
@@ -179,8 +193,8 @@ class Tareitas(tk.Tk):
 
     def header(self, parent, title, back=None):
         a,_,_,_,_,_ = self.colors(); bar = tk.Frame(parent, bg=a, height=120); bar.pack(fill="x"); bar.pack_propagate(False)
-        if back: tk.Button(bar, text="←", command=back, bg=a, fg="white", border=0, font=("Segoe UI",18,"bold")).place(x=24,y=22)
-        tk.Label(bar, text=title, bg=a, fg="white", font=("Segoe UI",24,"bold")).place(relx=.5,y=25,anchor="n")
+        if back: tk.Button(bar, text="←", command=back, bg=a, fg="white", border=0, font=(APP_FONT,18,"bold")).place(x=24,y=22)
+        tk.Label(bar, text=title, bg=a, fg="white", font=(APP_FONT,24,"bold")).place(relx=.5,y=25,anchor="n")
         return bar
 
     def rounded_action(self, parent, text, command, bg, fg, width=150, height=46, vertical=False):
@@ -195,19 +209,19 @@ class Tareitas(tk.Tk):
             canvas.create_arc(0,height-2*r,2*r,height,start=180,extent=90,fill=bg,outline=bg)
             canvas.create_arc(w-2*r,height-2*r,w,height,start=270,extent=90,fill=bg,outline=bg)
             canvas.create_rectangle(r,0,w-r,height,fill=bg,outline=bg); canvas.create_rectangle(0,r,w,height-r,fill=bg,outline=bg)
-            canvas.create_text(w/2,height/2,text=text,fill=fg,font=("Segoe UI",10,"bold"),tags=("action",))
+            canvas.create_text(w/2,height/2,text=text,fill=fg,font=(APP_FONT,10,"bold"),tags=("action",))
         canvas.bind("<Configure>",render); canvas.bind("<Button-1>",lambda _e:command()); canvas.tag_bind("action","<Button-1>",lambda _e:command())
         return canvas
 
     def show_home(self):
         self.clear(); a,s,m,p,surface,ink = self.colors()
         hero = tk.Frame(self.container,bg=a,height=214); hero.pack(fill="x"); hero.pack_propagate(False)
-        tk.Button(hero,text="▦",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",19,"bold"),cursor="hand2").place(x=35,y=35)
-        appearance = tk.Button(hero,text="🎨",command=self.show_appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2")
+        tk.Button(hero,text="▦",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,19,"bold"),cursor="hand2").place(x=35,y=35)
+        appearance = tk.Button(hero,text="🎨",command=self.show_appearance,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2")
         appearance.place(relx=1.0,x=-58,y=30,width=42,height=42)
-        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=("Segoe UI",19,"bold")).place(relx=.5,y=34,anchor="n")
-        tk.Label(hero,text="Hoy",bg=a,fg="white",font=("Segoe UI",32,"bold")).place(x=31,y=142)
-        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=("Segoe UI",13)).place(x=33,y=186)
+        tk.Label(hero,text=self.day.strftime("%d %b"),bg=a,fg="white",font=(APP_FONT,19,"bold")).place(relx=.5,y=34,anchor="n")
+        tk.Label(hero,text="Hoy",bg=a,fg="white",font=(APP_FONT,32,"bold")).place(x=31,y=142)
+        tk.Label(hero,text=f"{len(self.db.due(self.day))} tareas",bg=a,fg="white",font=(APP_FONT,13)).place(x=33,y=186)
         body = tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True)
         local_label = tk.Label(body,text="Modo local",bg=surface,fg=m,font=("Segoe UI",10)); local_label.pack(anchor="e",padx=34,pady=(27,0))
         days=tk.Frame(body,bg=surface); days.pack(fill="x",padx=22,pady=(12,18))
@@ -224,11 +238,11 @@ class Tareitas(tk.Tk):
             else: self.show_mini_widget()
             self.show_home()
         self.rounded_action(quick,"▾  Versión mini",toggle_widget_from_home,s,ink,165)
-        tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=("Segoe UI",25,"bold")).pack(anchor="w",padx=28)
+        tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=(APP_FONT,25,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
         progress_ink="#f7f4fa" if self.dark else m
-        if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=progress_ink,font=("Segoe UI",11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
+        if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=progress_ink,font=(APP_FONT,11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
         # El pie se reserva antes de la zona desplazable para que nunca quede
         # fuera de la ventana, incluso cuando una lista tenga muchas tareas.
         foot=tk.Frame(body,bg=surface,height=100); foot.pack(fill="x",side="bottom",padx=28,pady=(5,18)); foot.pack_propagate(False)
@@ -265,9 +279,9 @@ class Tareitas(tk.Tk):
             width=max(card.winfo_width(),300); rounded_box(card,0,1,width-2,72,14,soft)
             mark="☑" if completed else "☐"
             card.create_text(20,23,text=mark,fill=title_color,font=("Segoe UI Symbol",15),anchor="center",tags=("toggle",))
-            card.create_text(42,21,text=task["title"],fill=title_color,font=("Segoe UI",10,"bold"),anchor="w",tags=("toggle",))
-            card.create_text(44,47,text=detail,fill=detail_color,font=("Segoe UI",8),anchor="w",tags=("toggle",))
-            card.create_text(width-54,34,text="Editar",fill=title_color,font=("Segoe UI",8,"bold"),anchor="center",tags=("edit",))
+            card.create_text(42,21,text=task["title"],fill=title_color,font=(APP_FONT,10,"bold"),anchor="w",tags=("toggle",))
+            card.create_text(44,47,text=detail,fill=detail_color,font=(APP_FONT,8),anchor="w",tags=("toggle",))
+            card.create_text(width-54,34,text="Editar",fill=title_color,font=(APP_FONT,8,"bold"),anchor="center",tags=("edit",))
         card.bind("<Configure>",render)
         card.tag_bind("toggle","<Button-1>",lambda _e:self.complete(task["id"],not completed))
         card.tag_bind("edit","<Button-1>",lambda _e:self.show_task_form(task["category"],task))
@@ -448,17 +462,18 @@ class Tareitas(tk.Tk):
         width,height=330,72
         widget.geometry(f"{width}x{height}+{max(widget.winfo_screenwidth()-width-28,0)}+{42}")
         widget.configure(bg=a)
-        content=tk.Frame(widget,bg=a); content.pack(fill="both",expand=True,padx=12,pady=8)
-        self.mini_text=tk.Label(content,bg=a,fg="white",font=("Segoe UI",11,"bold"),anchor="w")
+        content=tk.Frame(widget,bg=a); content.pack(fill="x",padx=12,pady=(8,0))
+        self.mini_text=tk.Label(content,bg=a,fg="white",font=(APP_FONT,12,"bold"),anchor="w")
         self.mini_text.pack(side="left",fill="both",expand=True)
-        self.mini_expand=tk.Button(content,text="⌄",command=self.toggle_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",15,"bold"),cursor="hand2")
-        self.mini_expand.pack(side="right",padx=(2,5))
-        tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2").pack(side="right")
+        tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2").pack(side="right")
         self.mini_tasks=tk.Frame(widget,bg=a)
+        self.mini_expand=tk.Button(widget,text="⌄",command=self.toggle_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,15,"bold"),cursor="hand2")
+        self.mini_expand.pack(side="bottom",pady=(0,3))
         content.bind("<Button-1>",lambda _event:self.restore_from_widget())
         self.mini_text.bind("<Button-1>",lambda _event:self.restore_from_widget())
         widget.protocol("WM_DELETE_WINDOW",self.exit_app)
         self.update_mini_widget()
+        self.after_idle(lambda:self.apply_window_chrome(widget))
 
     def close_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists(): self.mini_widget.destroy()
@@ -497,13 +512,13 @@ class Tareitas(tk.Tk):
         self.mini_text.config(text=f"Tareitas  ·  {pending} {plural} hoy")
         self.mini_expand.config(text="⌃" if self.mini_expanded else "⌄")
         for child in self.mini_tasks.winfo_children(): child.destroy()
-        width=330; height=72
+        width=330; height=90
         if self.mini_expanded:
             self.mini_tasks.pack(fill="both",expand=True,padx=12,pady=(0,10))
-            height=236
+            height=254
             if pending_tasks:
                 for task in pending_tasks[:3]:
-                    tk.Button(self.mini_tasks,text=f"☐  {task['title']}",command=lambda tid=task["id"]:self.complete_from_widget(tid),bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,anchor="w",font=("Segoe UI",10,"bold"),padx=12,pady=8,cursor="hand2").pack(fill="x",pady=3)
+                    tk.Button(self.mini_tasks,text=f"☐  {task['title']}",command=lambda tid=task["id"]:self.complete_from_widget(tid),bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,anchor="w",font=(APP_FONT,11,"bold"),padx=12,pady=8,cursor="hand2").pack(fill="x",pady=3)
             else:
                 tk.Label(self.mini_tasks,text="✓ Todo listo por hoy",bg=a,fg="white",font=("Segoe UI",10,"bold")).pack(pady=20)
         else:
