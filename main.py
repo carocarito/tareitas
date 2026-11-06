@@ -526,7 +526,8 @@ class Tareitas(tk.Tk):
         widget.geometry(f"{width}x{height}+{max(widget.winfo_screenwidth()-width-28,0)}+{42}")
         widget.configure(bg=a)
         content=tk.Frame(widget,bg=a); content.pack(fill="x",padx=12,pady=(8,0))
-        self.mini_text=tk.Label(content,bg=a,fg="white",font=(APP_FONT,12,"bold"),anchor="w")
+        # El contador es el acceso inequívoco a la pantalla completa.
+        self.mini_text=tk.Button(content,command=self.restore_from_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,12,"bold"),anchor="w",cursor="hand2")
         self.mini_text.pack(side="left",fill="both",expand=True)
         tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,16),cursor="hand2").pack(side="right")
         self.mini_tasks=tk.Frame(widget,bg=a)
@@ -534,8 +535,6 @@ class Tareitas(tk.Tk):
         self.mini_expand=tk.Canvas(widget,bg=a,width=44,height=22,highlightthickness=0,cursor="hand2")
         self.mini_expand.pack(side="bottom",pady=(0,3))
         self.mini_expand.bind("<Button-1>",lambda _event:self.toggle_mini_widget())
-        content.bind("<Button-1>",lambda _event:self.restore_from_widget())
-        self.mini_text.bind("<Button-1>",lambda _event:self.restore_from_widget())
         widget.protocol("WM_DELETE_WINDOW",self.exit_app)
         self.update_mini_widget()
         self.after_idle(lambda:self.apply_window_chrome(widget))
