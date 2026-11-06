@@ -271,7 +271,7 @@ class Tareitas(tk.Tk):
         foot=tk.Frame(body,bg=surface,height=100); foot.pack(fill="x",side="bottom",padx=28,pady=(5,18)); foot.pack_propagate(False)
         tk.Button(foot,text="Salir",command=self.destroy,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(x=0,y=31)
         tk.Button(foot,text="Historial",command=self.show_history,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=.47,y=31,anchor="n")
-        tk.Button(foot,text="+",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",29,"bold"),cursor="hand2").place(relx=1.0,x=0,y=16,width=64,height=64,anchor="ne")
+        tk.Button(foot,text="+",command=self.show_quick_task,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=(APP_FONT,29,"bold"),cursor="hand2").place(relx=1.0,x=0,y=16,width=64,height=64,anchor="ne")
         canvas=tk.Canvas(body,bg=surface,highlightthickness=0); items=tk.Frame(canvas,bg=surface)
         items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all")))
         items_window=canvas.create_window((0,0),window=items,anchor="nw")
@@ -317,6 +317,26 @@ class Tareitas(tk.Tk):
         for category in CATEGORIES:
             self.rounded_action(body,f"{ICONS[category]}   {category}   ·   {counts.get(category,0)} tareas",lambda c=category:self.show_task_form(c),s,ink,520,72,vertical=True,font_size=14)
 
+    def show_quick_task(self):
+        """Alta simple: queda solo para el día actual sin repetir."""
+        self.clear(); a,s,m,p,surface,ink=self.colors(); self.header(self.container,"Tarea rápida",self.show_home)
+        body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=24)
+        tk.Label(body,text="Anota una tarea para hoy",bg=surface,fg=ink,font=(APP_FONT,22,"bold")).pack(anchor="w",pady=(0,5))
+        tk.Label(body,text="No necesitas elegir fecha, horario ni repetición.",bg=surface,fg=m,font=(APP_FONT,11)).pack(anchor="w",pady=(0,22))
+        title=tk.StringVar(); category=tk.StringVar(value="General")
+        tk.Label(body,text="Nombre de la tarea *",bg=surface,fg=ink,font=(APP_FONT,12,"bold")).pack(anchor="w")
+        tk.Entry(body,textvariable=title,bg=surface,fg=ink,insertbackground=ink,font=(APP_FONT,13)).pack(fill="x",pady=(4,14),ipady=5)
+        tk.Label(body,text="Descripción (opcional)",bg=surface,fg=ink,font=(APP_FONT,12,"bold")).pack(anchor="w")
+        description=tk.Text(body,height=5,bg=surface,fg=ink,insertbackground=ink,font=(APP_FONT,12)); description.pack(fill="x",pady=(4,14))
+        tk.Label(body,text="Categoría",bg=surface,fg=ink,font=(APP_FONT,12,"bold")).pack(anchor="w")
+        ttk.Combobox(body,textvariable=category,values=CATEGORIES,state="readonly",font=(APP_FONT,12)).pack(fill="x",pady=(4,22))
+        def save_quick():
+            if not title.get().strip(): return messagebox.showwarning(APP,"Escribe un nombre.")
+            today=date.today()
+            self.db.save_task({"title":title.get(),"description":description.get("1.0","end"),"category":category.get(),"weekdays":[],"interval":0,"start":today,"end":today,"start_time":"","end_time":"","reminder_minutes":0})
+            self.day=today; self.show_home()
+        ttk.Button(body,text="Agregar tarea para hoy",style="Accent.TButton",command=save_quick).pack(fill="x",ipady=8)
+
     def show_task_form(self,category,task=None):
         self.clear(); a,s,m,p,surface,ink=self.colors(); self.header(self.container,"Editar tarea" if task else "Crear tarea",self.show_categories); body=tk.Frame(self.container,bg=surface); body.pack(fill="both",expand=True,padx=30,pady=14)
         selected=tk.StringVar(value=(task["start_date"] if task else self.day.isoformat())); self.month_grid(body,date.fromisoformat(selected.get()),lambda d:selected.set(d.isoformat()))
@@ -360,6 +380,9 @@ class Tareitas(tk.Tk):
                     try: datetime.strptime(value, "%H:%M")
                     except ValueError: return messagebox.showwarning(APP,"Las horas deben tener formato HH:MM.")
             if finish and finish<start:return messagebox.showwarning(APP,"La fecha de fin debe ser posterior.")
+            # Sin repetición ni fecha final, una tarea completa se entiende
+            # como tarea de hoy y vence el mismo día.
+            if not chosen and not interval.get() and not finish: finish=start
             self.db.save_task({"title":title.get(),"description":desc.get("1.0","end"),"category":category,"weekdays":chosen,"interval":interval.get(),"start":start,"end":finish,"start_time":start_time.get().strip() if schedule_enabled.get() else "","end_time":end_time.get().strip() if schedule_enabled.get() else "","reminder_minutes":reminder.get() if schedule_enabled.get() else 0},task["id"] if task else None); self.day=start; self.show_home()
         ttk.Button(body,text="Guardar tarea",style="Accent.TButton",command=save).pack(fill="x",pady=8)
         if task:
