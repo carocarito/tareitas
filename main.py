@@ -65,12 +65,16 @@ class Database:
         CREATE TABLE IF NOT EXISTS tasks(
           id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL,
           weekdays TEXT NOT NULL DEFAULT '', interval_days INTEGER NOT NULL DEFAULT 0, start_date TEXT NOT NULL,
-          end_date TEXT NOT NULL DEFAULT '', start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1
+          end_date TEXT NOT NULL DEFAULT '', start_time TEXT NOT NULL DEFAULT '', end_time TEXT NOT NULL DEFAULT '', reminder_minutes INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE IF NOT EXISTS completions(task_id INTEGER NOT NULL, day TEXT NOT NULL, completed_at TEXT NOT NULL, PRIMARY KEY(task_id,day));
         CREATE TABLE IF NOT EXISTS pomodoros(id INTEGER PRIMARY KEY, title TEXT NOT NULL, work INTEGER NOT NULL, rest INTEGER NOT NULL, cycles INTEGER NOT NULL, completed_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS deadline_alerts(task_id INTEGER NOT NULL, day TEXT NOT NULL, reminder_minutes INTEGER NOT NULL, PRIMARY KEY(task_id,day,reminder_minutes));
         """)
+        columns={row[1] for row in self.conn.execute("PRAGMA table_info(tasks)")}
+        if "reminder_minutes" not in columns:
+            self.conn.execute("ALTER TABLE tasks ADD COLUMN reminder_minutes INTEGER NOT NULL DEFAULT 0")
         self.conn.commit()
 
     def setting(self, key: str, default: str) -> str:
@@ -95,11 +99,11 @@ class Database:
         return result
 
     def save_task(self, values: dict, task_id: int | None = None) -> None:
-        fields = (values["title"].strip(), values["description"].strip(), values["category"], ",".join(map(str, values["weekdays"])), values["interval"], values["start"].isoformat(), values["end"].isoformat() if values["end"] else "", values["start_time"], values["end_time"])
+        fields = (values["title"].strip(), values["description"].strip(), values["category"], ",".join(map(str, values["weekdays"])), values["interval"], values["start"].isoformat(), values["end"].isoformat() if values["end"] else "", values["start_time"], values["end_time"], values["reminder_minutes"])
         if task_id:
-            self.conn.execute("UPDATE tasks SET title=?,description=?,category=?,weekdays=?,interval_days=?,start_date=?,end_date=?,start_time=?,end_time=? WHERE id=?", (*fields, task_id))
+            self.conn.execute("UPDATE tasks SET title=?,description=?,category=?,weekdays=?,interval_days=?,start_date=?,end_date=?,start_time=?,end_time=?,reminder_minutes=? WHERE id=?", (*fields, task_id))
         else:
-            self.conn.execute("INSERT INTO tasks(title,description,category,weekdays,interval_days,start_date,end_date,start_time,end_time) VALUES(?,?,?,?,?,?,?,?,?)", fields)
+            self.conn.execute("INSERT INTO tasks(title,description,category,weekdays,interval_days,start_date,end_date,start_time,end_time,reminder_minutes) VALUES(?,?,?,?,?,?,?,?,?,?)", fields)
         self.conn.commit()
 
     def completed(self, task_id: int, target: date) -> bool:
@@ -123,6 +127,13 @@ class Database:
         self.conn.execute("INSERT INTO pomodoros(title,work,rest,cycles,completed_at) VALUES(?,?,?,?,?)", (title, work, rest, cycles, datetime.now().isoformat()))
         self.conn.commit()
 
+    def deadline_alert_was_sent(self, task_id: int, day: date, reminder_minutes: int) -> bool:
+        return bool(self.conn.execute("SELECT 1 FROM deadline_alerts WHERE task_id=? AND day=? AND reminder_minutes=?",(task_id,day.isoformat(),reminder_minutes)).fetchone())
+
+    def mark_deadline_alert_sent(self, task_id: int, day: date, reminder_minutes: int) -> None:
+        self.conn.execute("INSERT OR IGNORE INTO deadline_alerts(task_id,day,reminder_minutes) VALUES(?,?,?)",(task_id,day.isoformat(),reminder_minutes))
+        self.conn.commit()
+
 
 class Tareitas(tk.Tk):
     def __init__(self):
@@ -139,7 +150,7 @@ class Tareitas(tk.Tk):
         self.mini_widget = None
         self.style = ttk.Style(self); self.style.theme_use("clam")
         self.container = tk.Frame(self); self.container.pack(fill="both", expand=True)
-        self.apply_theme(); self.show_home(); self.after(self.notice_minutes * 60_000, self.pending_notice)
+        self.apply_theme(); self.show_home(); self.after(self.notice_minutes * 60_000, self.pending_notice); self.after(60_000, self.deadline_reminders)
 
     def colors(self):
         accent, soft, muted, page = PALETTES[self.palette_name]
@@ -149,6 +160,9 @@ class Tareitas(tk.Tk):
 
     def apply_theme(self):
         a,s,m,p,surface,ink = self.colors(); self.configure(bg=p)
+        # Las pantallas con márgenes muestran este contenedor; debe recibir el
+        # fondo correcto para que no aparezca un marco blanco en modo oscuro.
+        if hasattr(self, "container"): self.container.configure(bg=p)
         self.style.configure("TFrame", background=p); self.style.configure("Card.TFrame", background=surface)
         self.style.configure("TLabel", background=p, foreground=ink, font=("Segoe UI", 11)); self.style.configure("Title.TLabel", font=("Segoe UI", 25, "bold"), foreground=ink)
         self.style.configure("TButton", padding=9, font=("Segoe UI", 10, "bold"), background=s, foreground=ink, borderwidth=0)
@@ -206,14 +220,19 @@ class Tareitas(tk.Tk):
         tk.Label(body,text="Mis tareas",bg=surface,fg=ink,font=("Segoe UI",25,"bold")).pack(anchor="w",padx=28)
         tasks=self.db.due(self.day); done=sum(self.db.completed(t["id"],self.day) for t in tasks)
         self.update_mini_widget()
-        if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=m,font=("Segoe UI",11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
+        progress_ink="#f7f4fa" if self.dark else m
+        if tasks: tk.Label(body,text=f"{done} de {len(tasks)} completadas",bg=s,fg=progress_ink,font=("Segoe UI",11,"bold"),padx=12,pady=8).pack(anchor="w",padx=28,pady=(10,4))
         # El pie se reserva antes de la zona desplazable para que nunca quede
         # fuera de la ventana, incluso cuando una lista tenga muchas tareas.
         foot=tk.Frame(body,bg=surface,height=100); foot.pack(fill="x",side="bottom",padx=28,pady=(5,18)); foot.pack_propagate(False)
         tk.Button(foot,text="Salir",command=self.destroy,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(x=0,y=31)
         tk.Button(foot,text="Historial",command=self.show_history,bg=surface,fg=m,activebackground=surface,activeforeground=m,border=0,highlightthickness=0,font=("Segoe UI",12,"bold"),cursor="hand2").place(relx=.47,y=31,anchor="n")
         tk.Button(foot,text="+",command=self.show_categories,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",29,"bold"),cursor="hand2").place(relx=1.0,x=0,y=16,width=64,height=64,anchor="ne")
-        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); items=tk.Frame(canvas,bg=surface); items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0,0),window=items,anchor="nw"); canvas.pack(fill="both",expand=True,padx=28,pady=6)
+        canvas=tk.Canvas(body,bg=surface,highlightthickness=0); items=tk.Frame(canvas,bg=surface)
+        items.bind("<Configure>",lambda e:canvas.configure(scrollregion=canvas.bbox("all")))
+        items_window=canvas.create_window((0,0),window=items,anchor="nw")
+        canvas.bind("<Configure>",lambda e:canvas.itemconfigure(items_window,width=e.width))
+        canvas.pack(fill="both",expand=True,padx=28,pady=6)
         self.bind_all("<MouseWheel>",lambda event:canvas.yview_scroll(int(-event.delta/120),"units"))
         if not tasks: tk.Label(items,text="No hay tareas para este día.",bg=surface,fg=m,font=("Segoe UI",13)).pack(pady=50)
         for task in tasks: self.task_card(items,task,s,m,ink)
@@ -270,20 +289,34 @@ class Tareitas(tk.Tk):
             var=tk.BooleanVar(value=str(i) in old); weekdays.append(var); tk.Checkbutton(row,text=name,variable=var,bg=surface,fg=ink,selectcolor=surface).pack(side="left")
         interval=tk.IntVar(value=task["interval_days"] if task else 0); tk.Label(advanced,text="Cada (días, 0=no usar)",bg=surface,fg=ink).pack(anchor="w"); tk.Spinbox(advanced,from_=0,to=3650,textvariable=interval).pack(anchor="w")
         end=tk.StringVar(value=task["end_date"] if task else ""); tk.Label(advanced,text="Fecha de fin (AAAA-MM-DD, opcional)",bg=surface,fg=ink).pack(anchor="w"); tk.Entry(advanced,textvariable=end,bg=surface,fg=ink).pack(fill="x")
-        hours=tk.Frame(advanced,bg=surface); hours.pack(fill="x",pady=(8,0)); tk.Label(hours,text="Desde",bg=surface,fg=ink).pack(side="left")
-        start_time=tk.StringVar(value=task["start_time"] if task else ""); tk.Entry(hours,textvariable=start_time,width=9,bg=surface,fg=ink,insertbackground=ink).pack(side="left",padx=(7,18))
-        tk.Label(hours,text="Hasta",bg=surface,fg=ink).pack(side="left"); end_time=tk.StringVar(value=task["end_time"] if task else ""); tk.Entry(hours,textvariable=end_time,width=9,bg=surface,fg=ink,insertbackground=ink).pack(side="left",padx=7)
+        start_time=tk.StringVar(value=task["start_time"] if task else "")
+        end_time=tk.StringVar(value=task["end_time"] if task else "")
+        schedule_enabled=tk.BooleanVar(value=bool(start_time.get() or end_time.get()))
+        reminder=tk.IntVar(value=int(task["reminder_minutes"]) if task and task["reminder_minutes"] else 60)
+        tk.Checkbutton(advanced,text="Esta tarea tiene horario",variable=schedule_enabled,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w",pady=(8,0))
+        schedule_box=tk.Frame(advanced,bg=surface)
+        hours=tk.Frame(schedule_box,bg=surface); hours.pack(fill="x",pady=(5,0)); tk.Label(hours,text="Desde",bg=surface,fg=ink).pack(side="left")
+        tk.Entry(hours,textvariable=start_time,width=9,bg=surface,fg=ink,insertbackground=ink).pack(side="left",padx=(7,18))
+        tk.Label(hours,text="Hora límite",bg=surface,fg=ink).pack(side="left"); tk.Entry(hours,textvariable=end_time,width=9,bg=surface,fg=ink,insertbackground=ink).pack(side="left",padx=7)
+        tk.Label(schedule_box,text="Avisar antes de la hora límite",bg=surface,fg=ink).pack(anchor="w",pady=(7,0))
+        tk.Radiobutton(schedule_box,text="30 minutos antes",variable=reminder,value=30,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
+        tk.Radiobutton(schedule_box,text="1 hora antes",variable=reminder,value=60,bg=surface,fg=ink,selectcolor=surface).pack(anchor="w")
+        def toggle_schedule(*_args):
+            if schedule_enabled.get(): schedule_box.pack(fill="x")
+            else: schedule_box.pack_forget()
+        schedule_enabled.trace_add("write",toggle_schedule); toggle_schedule()
         def save():
             if not title.get().strip(): return messagebox.showwarning(APP,"Escribe un nombre.")
             chosen=[i for i,v in enumerate(weekdays) if v.get()]
             try: start=date.fromisoformat(selected.get()); finish=date.fromisoformat(end.get()) if end.get() else None
             except ValueError: return messagebox.showwarning(APP,"Revisa las fechas.")
+            if schedule_enabled.get() and not end_time.get().strip(): return messagebox.showwarning(APP,"Indica una hora límite para activar el aviso.")
             for value in (start_time.get().strip(), end_time.get().strip()):
                 if value:
                     try: datetime.strptime(value, "%H:%M")
                     except ValueError: return messagebox.showwarning(APP,"Las horas deben tener formato HH:MM.")
             if finish and finish<start:return messagebox.showwarning(APP,"La fecha de fin debe ser posterior.")
-            self.db.save_task({"title":title.get(),"description":desc.get("1.0","end"),"category":category,"weekdays":chosen,"interval":interval.get(),"start":start,"end":finish,"start_time":start_time.get().strip(),"end_time":end_time.get().strip()},task["id"] if task else None); self.day=start; self.show_home()
+            self.db.save_task({"title":title.get(),"description":desc.get("1.0","end"),"category":category,"weekdays":chosen,"interval":interval.get(),"start":start,"end":finish,"start_time":start_time.get().strip() if schedule_enabled.get() else "","end_time":end_time.get().strip() if schedule_enabled.get() else "","reminder_minutes":reminder.get() if schedule_enabled.get() else 0},task["id"] if task else None); self.day=start; self.show_home()
         ttk.Button(body,text="Guardar tarea",style="Accent.TButton",command=save).pack(fill="x",pady=8)
 
     def month_grid(self,parent,shown,choose,navigate=None,large=False):
@@ -426,6 +459,19 @@ class Tareitas(tk.Tk):
         pending=[t for t in self.db.due(date.today()) if not self.db.completed(t["id"],date.today())]
         if pending: messagebox.showinfo(APP,f"Tienes {len(pending)} tarea(s) pendiente(s).")
         self.after(self.notice_minutes*60_000,self.pending_notice)
+
+    def deadline_reminders(self):
+        now=datetime.now(); today=now.date()
+        for task in self.db.due(today):
+            minutes=int(task["reminder_minutes"] or 0)
+            if not minutes or not task["end_time"] or self.db.completed(task["id"],today): continue
+            try: deadline=datetime.combine(today,datetime.strptime(task["end_time"],"%H:%M").time())
+            except ValueError: continue
+            remaining=(deadline-now).total_seconds()/60
+            if 0 < remaining <= minutes and not self.db.deadline_alert_was_sent(task["id"],today,minutes):
+                self.db.mark_deadline_alert_sent(task["id"],today,minutes)
+                messagebox.showinfo(APP,f"{task['title']} sigue pendiente.\nHora límite: {task['end_time']}.")
+        self.after(60_000,self.deadline_reminders)
 
 
 if __name__ == "__main__":
