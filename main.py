@@ -140,7 +140,7 @@ class Tareitas(tk.Tk):
         super().__init__(); self.title(APP); self.geometry("620x850"); self.minsize(540, 720)
         # En pantallas Windows de alta densidad Tk amplía las fuentes en
         # exceso. Esta escala conserva nitidez y las reduce de forma pareja.
-        self.tk.call("tk", "scaling", 1.15)
+        self.tk.call("tk", "scaling", 1.0)
         self.db, self.day = Database(), date.today()
         saved_palette=self.db.setting("palette", "Violeta / Lavanda")
         self.palette_name = saved_palette if saved_palette in PALETTES else "Violeta / Lavanda"
@@ -148,6 +148,7 @@ class Tareitas(tk.Tk):
         self.notice_minutes = int(self.db.setting("notice_minutes", "120"))
         self.calendar_month = self.day.replace(day=1)
         self.mini_widget = None
+        self.mini_expanded = False
         self.style = ttk.Style(self); self.style.theme_use("clam")
         self.container = tk.Frame(self); self.container.pack(fill="both", expand=True)
         self.protocol("WM_DELETE_WINDOW",self.close_main_window)
@@ -241,7 +242,7 @@ class Tareitas(tk.Tk):
     def task_card(self,parent,task,soft,muted,ink):
         # Canvas permite tarjetas redondeadas reales; los controles nativos de
         # Tkinter solo pueden ser rectangulares.
-        card=tk.Canvas(parent,bg=parent.cget("bg"),height=84,highlightthickness=0,cursor="hand2")
+        card=tk.Canvas(parent,bg=parent.cget("bg"),height=74,highlightthickness=0,cursor="hand2")
         card.pack(fill="x",pady=6)
         completed=self.db.completed(task["id"],self.day)
         detail=" · ".join(x for x in ([task["start_time"], task["description"] or f"{ICONS[task['category']]} {task['category']}"]) if x)
@@ -256,12 +257,12 @@ class Tareitas(tk.Tk):
             canvas.create_rectangle(x1,y1+r,x2,y2-r,fill=fill,outline=fill)
         def render(_event=None):
             card.delete("all")
-            width=max(card.winfo_width(),300); rounded_box(card,0,1,width-2,82,14,soft)
+            width=max(card.winfo_width(),300); rounded_box(card,0,1,width-2,72,14,soft)
             mark="☑" if completed else "☐"
-            card.create_text(20,27,text=mark,fill=title_color,font=("Segoe UI Symbol",17),anchor="center",tags=("toggle",))
-            card.create_text(42,24,text=task["title"],fill=title_color,font=("Segoe UI",11,"bold"),anchor="w",tags=("toggle",))
-            card.create_text(44,52,text=detail,fill=detail_color,font=("Segoe UI",9),anchor="w",tags=("toggle",))
-            card.create_text(width-54,39,text="Editar",fill=title_color,font=("Segoe UI",9,"bold"),anchor="center",tags=("edit",))
+            card.create_text(20,23,text=mark,fill=title_color,font=("Segoe UI Symbol",15),anchor="center",tags=("toggle",))
+            card.create_text(42,21,text=task["title"],fill=title_color,font=("Segoe UI",10,"bold"),anchor="w",tags=("toggle",))
+            card.create_text(44,47,text=detail,fill=detail_color,font=("Segoe UI",8),anchor="w",tags=("toggle",))
+            card.create_text(width-54,34,text="Editar",fill=title_color,font=("Segoe UI",8,"bold"),anchor="center",tags=("edit",))
         card.bind("<Configure>",render)
         card.tag_bind("toggle","<Button-1>",lambda _e:self.complete(task["id"],not completed))
         card.tag_bind("edit","<Button-1>",lambda _e:self.show_task_form(task["category"],task))
@@ -439,13 +440,16 @@ class Tareitas(tk.Tk):
         widget.title("Pendientes de Tareitas")
         widget.attributes("-topmost", True)
         widget.resizable(False,False)
-        width,height=300,72
+        width,height=330,72
         widget.geometry(f"{width}x{height}+{max(widget.winfo_screenwidth()-width-28,0)}+{42}")
         widget.configure(bg=a)
         content=tk.Frame(widget,bg=a); content.pack(fill="both",expand=True,padx=12,pady=8)
         self.mini_text=tk.Label(content,bg=a,fg="white",font=("Segoe UI",11,"bold"),anchor="w")
         self.mini_text.pack(side="left",fill="both",expand=True)
+        self.mini_expand=tk.Button(content,text="⌄",command=self.toggle_mini_widget,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",15,"bold"),cursor="hand2")
+        self.mini_expand.pack(side="right",padx=(2,5))
         tk.Button(content,text="×",command=self.exit_app,bg=a,fg="white",activebackground=a,activeforeground="white",border=0,highlightthickness=0,font=("Segoe UI",16),cursor="hand2").pack(side="right")
+        self.mini_tasks=tk.Frame(widget,bg=a)
         content.bind("<Button-1>",lambda _event:self.restore_from_widget())
         self.mini_text.bind("<Button-1>",lambda _event:self.restore_from_widget())
         widget.protocol("WM_DELETE_WINDOW",self.exit_app)
@@ -454,6 +458,16 @@ class Tareitas(tk.Tk):
     def close_mini_widget(self):
         if self.mini_widget and self.mini_widget.winfo_exists(): self.mini_widget.destroy()
         self.mini_widget=None
+        self.mini_expanded=False
+
+    def toggle_mini_widget(self):
+        self.mini_expanded=not self.mini_expanded
+        self.update_mini_widget()
+
+    def complete_from_widget(self, task_id: int):
+        self.db.toggle(task_id,date.today(),True)
+        self.update_mini_widget()
+        if self.state() != "withdrawn": self.show_home()
 
     def close_main_window(self):
         """Con widget abierto, la ventana principal se oculta pero sigue viva."""
@@ -471,9 +485,26 @@ class Tareitas(tk.Tk):
 
     def update_mini_widget(self):
         if not self.mini_widget or not self.mini_widget.winfo_exists(): return
-        pending=sum(not self.db.completed(task["id"],date.today()) for task in self.db.due(date.today()))
+        a,s,m,p,surface,ink=self.colors()
+        pending_tasks=[task for task in self.db.due(date.today()) if not self.db.completed(task["id"],date.today())]
+        pending=len(pending_tasks)
         plural="tarea pendiente" if pending == 1 else "tareas pendientes"
         self.mini_text.config(text=f"Tareitas  ·  {pending} {plural} hoy")
+        self.mini_expand.config(text="⌃" if self.mini_expanded else "⌄")
+        for child in self.mini_tasks.winfo_children(): child.destroy()
+        width=330; height=72
+        if self.mini_expanded:
+            self.mini_tasks.pack(fill="both",expand=True,padx=12,pady=(0,10))
+            height=236
+            if pending_tasks:
+                for task in pending_tasks[:3]:
+                    tk.Button(self.mini_tasks,text=f"☐  {task['title']}",command=lambda tid=task["id"]:self.complete_from_widget(tid),bg=s,fg=ink,activebackground=s,activeforeground=ink,border=0,highlightthickness=0,anchor="w",font=("Segoe UI",10,"bold"),padx=12,pady=8,cursor="hand2").pack(fill="x",pady=3)
+            else:
+                tk.Label(self.mini_tasks,text="✓ Todo listo por hoy",bg=a,fg="white",font=("Segoe UI",10,"bold")).pack(pady=20)
+        else:
+            self.mini_tasks.pack_forget()
+        x=max(self.mini_widget.winfo_screenwidth()-width-28,0)
+        self.mini_widget.geometry(f"{width}x{height}+{x}+42")
 
     def pending_notice(self):
         pending=[t for t in self.db.due(date.today()) if not self.db.completed(t["id"],date.today())]
